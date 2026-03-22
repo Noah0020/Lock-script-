@@ -108,7 +108,7 @@ local bg = Instance.new("ImageLabel")
 bg.Size = UDim2.new(1,0,1,0)
 bg.Position = UDim2.new(0,0,0,0)
 bg.BackgroundTransparency = 1
-bg.Image = "rbxassetid://92460766977717" -- decal background
+bg.Image = "rbxassetid://92460766977717"
 bg.Parent = loadFrame
 
 local textLabel = Instance.new("TextLabel")
@@ -121,10 +121,7 @@ textLabel.TextScaled = true
 textLabel.TextColor3 = Color3.fromRGB(255,0,0)
 textLabel.Parent = loadFrame
 
--- Hide main GUI initially
 gui.Enabled = false
-
--- Delay then remove loading
 task.delay(2, function()
     loadingGui:Destroy()
     gui.Enabled = true
@@ -218,33 +215,36 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Fully draggable GUI
-local function makeDraggable(guiObj)
-    local dragging, dragStart, startPos = false, nil, nil
-    local dragInput
-    guiObj.InputBegan:Connect(function(input)
+-- OLD WORKING draggable code
+local function makeDraggable(obj)
+    local dragging = false
+    local dragInput, startPos, startFramePos
+
+    obj.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            dragStart = input.Position
-            startPos = guiObj.Position
+            startPos = input.Position
+            startFramePos = obj.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
-    guiObj.InputChanged:Connect(function(input)
+
+    obj.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
+
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == dragInput then
-            local delta = input.Position - dragStart
-            guiObj.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
+        if input == dragInput and dragging then
+            local delta = input.Position - startPos
+            obj.Position = UDim2.new(
+                startFramePos.X.Scale,
+                startFramePos.X.Offset + delta.X,
+                startFramePos.Y.Scale,
+                startFramePos.Y.Offset + delta.Y
             )
         end
     end)
