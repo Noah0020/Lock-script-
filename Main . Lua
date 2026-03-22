@@ -16,7 +16,7 @@ local BodyOffset = Vector3.new(0, 2, 0)
 local CameraDistance = 12
 local CameraHeight = 5
 
--- Functions
+-- Validate characters
 local function isValidCharacter(char)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -218,56 +218,42 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Frame drag
-local dragging, dragStart, startPos = false, nil, nil
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-    end
-end)
-frame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
+-- Fully draggable GUI
+local function makeDraggable(guiObj)
+    local dragging, dragStart, startPos = false, nil, nil
+    local dragInput
+    guiObj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObj.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    guiObj.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - dragStart
+            guiObj.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
 
--- Toggle button drag
-local toggleDragging, toggleStart, togglePos = false, nil, nil
-toggleBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        toggleDragging = true
-        toggleStart = input.Position
-        togglePos = toggleBtn.Position
-    end
-end)
-toggleBtn.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        toggleDragging = false
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if toggleDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - toggleStart
-        toggleBtn.Position = UDim2.new(
-            togglePos.X.Scale,
-            togglePos.X.Offset + delta.X,
-            togglePos.Y.Scale,
-            togglePos.Y.Offset + delta.Y
-        )
-    end
-end)
+makeDraggable(frame)
+makeDraggable(toggleBtn)
 
+-- Buttons functionality
 lockBtn.MouseButton1Click:Connect(function()
     LockEnabled = not LockEnabled
     lockBtn.Text = LockEnabled and "LOCK: ON" or "LOCK: OFF"
