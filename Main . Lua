@@ -1,63 +1,113 @@
--- Targetsaken by Grok ❤️ - GUI Closable + Draggable + All Buttons Active + NOTHING starts ON
+--!nocheck
+--!nolint
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Camera = Workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
+if string.split(identifyexecutor() or "None", " ")[1] == "Xeno" then
+    getgenv().WebSocket = nil
+end
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
-local Window = Library.CreateLib("Targetsaken by Grok ❤️", "DarkTheme")
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
 
-local AbilitiesTab = Window:NewTab("Abilities")
-local VisualsTab = Window:NewTab("Visuals")
-local MiscTab = Window:NewTab("Misc")
+local Window = Library:CreateWindow({
+    Title = "Targetsaken by Grok ❤️",
+    Footer = "Survivor Ability Hub",
+    ToggleKeybind = Enum.KeyCode.RightControl,
+    MobileButtonsSide = "Left",
+    AutoShow = true,
+    Center = true,
+    Size = UDim2.fromOffset(420, 380)
+})
 
--- ALL FEATURES START OFF (nothing activates in advance)
 local Features = {
     AutoAimAbility = false,
-    AutoOtherAbilities = false,
-    AutoChange = false,
+    CameraLock = false,
     ESP = false,
     InfStamina = false,
-    CameraLock = false
+    AutoOtherAbilities = false,
+    AutoChange = false
 }
 local RangeValue = 25
 local PredictionValue = 0.25
 local LockTargetType = "Survivor"
-local Highlights = {}
-local RayParams = RaycastParams.new()
-RayParams.FilterType = Enum.RaycastFilterType.Exclude
 
--- Safe folder helpers (re-checked 3x)
 local PlayersFolder = Workspace:FindFirstChild("Players")
 local function GetSurvivors() return PlayersFolder and PlayersFolder:FindFirstChild("Survivors") end
 local function GetKillers() return PlayersFolder and PlayersFolder:FindFirstChild("Killers") end
 
--- Abilities Tab (all buttons active)
-local AbSection = AbilitiesTab:NewSection("Core Features")
-AbSection:NewToggle("Auto Aim on Ability Use", "Aims ONLY when you click/use ability", function(state) Features.AutoAimAbility = state end)
-AbSection:NewToggle("Camera Lock", "Constantly locks camera on target", function(state) Features.CameraLock = state end)
-AbSection:NewDropdown("Lock Target", {"Survivor", "Killer"}, function(choice) LockTargetType = choice end, "Survivor")
-AbSection:NewSlider("Range", "Max range (studs)", 0, 50, RangeValue, function(v) RangeValue = v end, true)
-AbSection:NewSlider("Prediction", "Aim prediction", 0, 1, PredictionValue, function(v) PredictionValue = v end, true)
-AbSection:NewToggle("Auto Other Abilities", "Auto Raging Pace / Eye / Pizza / 404 etc.", function(state) Features.AutoOtherAbilities = state end)
-AbSection:NewToggle("Auto Change", "Cycles abilities", function(state) Features.AutoChange = state end)
+local RayParams = RaycastParams.new()
+RayParams.FilterType = Enum.RaycastFilterType.Exclude
 
--- Visuals Tab
-local VisSection = VisualsTab:NewSection("Visuals")
-VisSection:NewToggle("ESP", "Highlights everyone", function(state) Features.ESP = state end)
+local AbilitiesTab = Window:AddTab("Abilities")
+local AbGroup = AbilitiesTab:AddGroupbox({Name = "Core Features"})
 
--- Misc Tab
-local MiscSection = MiscTab:NewSection("Misc")
-MiscSection:NewToggle("Infinite Stamina", "Never runs out", function(state) Features.InfStamina = state end)
+AbGroup:AddToggle({
+    Name = "Auto Aim on Ability Use",
+    Default = false,
+    Callback = function(state) Features.AutoAimAbility = state end
+})
 
--- Auto Aim ONLY when you use ability (left click)
-UserInputService.InputBegan:Connect(function(input, gp)
+AbGroup:AddToggle({
+    Name = "Camera Lock",
+    Default = false,
+    Callback = function(state) Features.CameraLock = state end
+})
+
+AbGroup:AddDropdown({
+    Name = "Lock Target",
+    Values = {"Survivor", "Killer"},
+    Default = "Survivor",
+    Callback = function(choice) LockTargetType = choice end
+})
+
+AbGroup:AddSlider({
+    Name = "Range",
+    Min = 0,
+    Max = 50,
+    Default = 25,
+    Callback = function(v) RangeValue = v end
+})
+
+AbGroup:AddSlider({
+    Name = "Prediction",
+    Min = 0,
+    Max = 1,
+    Default = 0.25,
+    Callback = function(v) PredictionValue = v end
+})
+
+AbGroup:AddToggle({
+    Name = "Auto Other Abilities",
+    Default = false,
+    Callback = function(state) Features.AutoOtherAbilities = state end
+})
+
+AbGroup:AddToggle({
+    Name = "Auto Change",
+    Default = false,
+    Callback = function(state) Features.AutoChange = state end
+})
+
+local VisualsTab = Window:AddTab("Visuals")
+local VisGroup = VisualsTab:AddGroupbox({Name = "ESP"})
+
+VisGroup:AddToggle({
+    Name = "ESP",
+    Default = false,
+    Callback = function(state) Features.ESP = state end
+})
+
+local MiscTab = Window:AddTab("Misc")
+local MiscGroup = MiscTab:AddGroupbox({Name = "Misc"})
+
+MiscGroup:AddToggle({
+    Name = "Infinite Stamina",
+    Default = false,
+    Callback = function(state) Features.InfStamina = state end
+})
+
+game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
     if gp or not Features.AutoAimAbility or input.UserInputType \~= Enum.UserInputType.MouseButton1 then return end
     
-    local myChar = LocalPlayer.Character
+    local myChar = game.Players.LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
     local myHRP = myChar.HumanoidRootPart
     
@@ -66,7 +116,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
     local targetHRP = nil
     local closest = math.huge
     
-    -- Survivors first
     local survFolder = GetSurvivors()
     if survFolder then
         for _, char in ipairs(survFolder:GetChildren()) do
@@ -84,7 +133,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
         end
     end
     
-    -- Killer if no survivor found
     if not targetHRP then
         local killFolder = GetKillers()
         if killFolder then
@@ -106,60 +154,51 @@ UserInputService.InputBegan:Connect(function(input, gp)
     
     if targetHRP then
         local predicted = targetHRP.Position + (targetHRP.Velocity * PredictionValue)
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, predicted)
+        Workspace.CurrentCamera.CFrame = CFrame.lookAt(Workspace.CurrentCamera.CFrame.Position, predicted)
     end
 end)
 
--- Main Loop (only runs what you turn ON)
-RunService.RenderStepped:Connect(function()
-    local myChar = LocalPlayer.Character
+game:GetService("RunService").RenderStepped:Connect(function()
+    local myChar = game.Players.LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
     local myHRP = myChar.HumanoidRootPart
     local myHum = myChar:FindFirstChildOfClass("Humanoid")
     
-    -- Infinite Stamina (only if toggled)
     if Features.InfStamina and myHum then
         myHum:SetAttribute("Stamina", 100)
         local stam = myChar:FindFirstChild("Stamina") or myChar:FindFirstChild("SprintStamina")
         if stam and stam:IsA("NumberValue") then stam.Value = 100 end
     end
     
-    -- ESP (only if toggled)
     if Features.ESP then
         local survFolder = GetSurvivors()
         if survFolder then
             for _, char in ipairs(survFolder:GetChildren()) do
-                if not Highlights[char] then
+                if not char:FindFirstChild("Highlight") then
                     local hl = Instance.new("Highlight")
                     hl.Adornee = char
                     hl.FillColor = Color3.fromRGB(0, 255, 0)
                     hl.OutlineColor = Color3.fromRGB(255, 255, 255)
                     hl.FillTransparency = 0.6
                     hl.Parent = char
-                    Highlights[char] = hl
                 end
             end
         end
         local killFolder = GetKillers()
         if killFolder then
             for _, char in ipairs(killFolder:GetChildren()) do
-                if not Highlights[char] then
+                if not char:FindFirstChild("Highlight") then
                     local hl = Instance.new("Highlight")
                     hl.Adornee = char
                     hl.FillColor = Color3.fromRGB(255, 0, 0)
                     hl.OutlineColor = Color3.fromRGB(255, 255, 255)
                     hl.FillTransparency = 0.6
                     hl.Parent = char
-                    Highlights[char] = hl
                 end
             end
         end
-    else
-        for _, hl in pairs(Highlights) do if hl then hl:Destroy() end end
-        Highlights = {}
     end
     
-    -- Camera Lock (only if toggled)
     if Features.CameraLock then
         local targetHRP = nil
         local closest = math.huge
@@ -184,11 +223,10 @@ RunService.RenderStepped:Connect(function()
         
         if targetHRP then
             local predicted = targetHRP.Position + (targetHRP.Velocity * PredictionValue)
-            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, predicted)
+            Workspace.CurrentCamera.CFrame = CFrame.lookAt(Workspace.CurrentCamera.CFrame.Position, predicted)
         end
     end
     
-    -- Auto Other Abilities & Auto Change (only if toggled)
     if Features.AutoOtherAbilities then
         for _, tool in ipairs(myChar:GetChildren()) do
             if tool:IsA("Tool") and (tool.Name:lower():find("rage") or tool.Name:lower():find("eye") or tool.Name:lower():find("pizza") or tool.Name:lower():find("404")) then
@@ -199,7 +237,7 @@ RunService.RenderStepped:Connect(function()
     if Features.AutoChange then
         for _, tool in ipairs(myChar:GetChildren()) do
             if tool:IsA("Tool") then
-                tool.Parent = LocalPlayer.Backpack
+                tool.Parent = game.Players.LocalPlayer.Backpack
                 task.wait(0.5)
                 tool.Parent = myChar
                 break
@@ -207,5 +245,3 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
-
-print("✅ Targetsaken LOADED! GUI is draggable (drag title bar) + closable (click X top right). All buttons active, NOTHING starts ON until you toggle! 🔥 Go have fun, bestie! ❤️")
