@@ -1,3 +1,5 @@
+-- Lock-on Script with Fallback and Dual Lock Modes
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -6,43 +8,39 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
--- SETTINGS
+-- SETTINGS (defaults)
 local LockEnabled = false
-local LockMode = "Camera"
+local LockMode = "Camera"      -- Camera or Character
 local PredictionMultiplier = 0.25
 local Smoothness = 0.18
-local TargetType = "Survivor"
-local TargetPriority = "Center"
+local TargetType = "Survivor"  -- default group: "Survivors" (Workspace)
+local TargetPriority = "Center" -- or "LowestHP"
 local LockedTarget = nil
 
--- GUI
+-- GUI Setup (Draggable panel with header and toggles)
 local gui = Instance.new("ScreenGui")
 gui.Name = "LockUI"
 gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-gui.ResetOnSpawn = false
-
--- FRAME
+gui.ResetOnSpawn = false  -- Keep UI after player respawn
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 120, 0, 190)
+frame.Size = UDim2.new(0, 120, 0, 220) 
 frame.Position = UDim2.new(0.8, 0, 0.6, 0)
-frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 frame.BackgroundTransparency = 0.2
 frame.BorderSizePixel = 0
 frame.Parent = gui
-
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0.25, 0)
 Instance.new("UIStroke", frame).Thickness = 1
 
--- DRAG
-local function makeDraggable(frame)
-    local dragging, dragInput, startPos, startFramePos
-
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+-- Draggable function (works with mouse or touch)
+local function makeDraggable(obj)
+    local dragging, dragInput, startPos, startFramePos = false, nil, nil, nil
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 
+           or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             startPos = input.Position
-            startFramePos = frame.Position
-
+            startFramePos = obj.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -50,17 +48,16 @@ local function makeDraggable(frame)
             end)
         end
     end)
-
-    frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+    obj.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement 
+           or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
+        if dragging and input == dragInput then
             local delta = input.Position - startPos
-            frame.Position = UDim2.new(
+            obj.Position = UDim2.new(
                 startFramePos.X.Scale,
                 startFramePos.X.Offset + delta.X,
                 startFramePos.Y.Scale,
@@ -69,140 +66,189 @@ local function makeDraggable(frame)
         end
     end)
 end
-
 makeDraggable(frame)
 
--- HEADER
+-- Header Label
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, -10, 0, 25)
 header.Position = UDim2.new(0, 5, 0, 5)
 header.Text = "Targetsaken"
 header.TextScaled = true
 header.Font = Enum.Font.SourceSansBold
-header.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+header.BackgroundColor3 = Color3.fromRGB(40,40,40)
 header.TextColor3 = Color3.fromRGB(255,255,255)
 header.BorderSizePixel = 0
 header.Parent = frame
-
 Instance.new("UICorner", header).CornerRadius = UDim.new(0.3, 0)
 
--- LOCK BUTTON
+-- [Lock ON/OFF] Button
 local lockButton = Instance.new("TextButton")
-lockButton.Size = UDim2.new(1, -10, 0, 40)
+lockButton.Size = UDim2.new(1, -10, 0, 30)
 lockButton.Position = UDim2.new(0, 5, 0, 35)
 lockButton.Text = "OFF"
 lockButton.TextScaled = true
-lockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+lockButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
 lockButton.TextColor3 = Color3.fromRGB(255,255,255)
 lockButton.BorderSizePixel = 0
 lockButton.Parent = frame
-
 Instance.new("UICorner", lockButton).CornerRadius = UDim.new(0.3, 0)
-
 lockButton.MouseButton1Click:Connect(function()
     LockEnabled = not LockEnabled
-    lockButton.Text = LockEnabled and "ON" or "OFF"
+    lockButton.Text = (LockEnabled and "ON" or "OFF")
     if not LockEnabled then
         LockedTarget = nil
     end
 end)
 
--- TYPE BUTTON
+-- [Survivor/Killer] Button
 local typeButton = Instance.new("TextButton")
-typeButton.Size = UDim2.new(1, -10, 0, 40)
-typeButton.Position = UDim2.new(0, 5, 0, 80)
+typeButton.Size = UDim2.new(1, -10, 0, 30)
+typeButton.Position = UDim2.new(0, 5, 0, 70)
 typeButton.Text = "SURV"
 typeButton.TextScaled = true
-typeButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+typeButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
 typeButton.TextColor3 = Color3.fromRGB(200,200,200)
 typeButton.BorderSizePixel = 0
 typeButton.Parent = frame
-
 Instance.new("UICorner", typeButton).CornerRadius = UDim.new(0.3, 0)
-
 typeButton.MouseButton1Click:Connect(function()
-    TargetType = (TargetType == "Survivor") and "Killer" or "Survivor"
-    typeButton.Text = (TargetType == "Survivor") and "SURV" or "KILL"
-    LockedTarget = nil
+    if TargetType == "Survivor" then 
+        TargetType = "Killer"
+        typeButton.Text = "KILL"
+    else
+        TargetType = "Survivor"
+        typeButton.Text = "SURV"
+    end
+    LockedTarget = nil  -- reset on change
 end)
 
--- PRIORITY BUTTON
+-- [Priority: Center/LowestHP] Button
 local priorityButton = Instance.new("TextButton")
-priorityButton.Size = UDim2.new(1, -10, 0, 40)
-priorityButton.Position = UDim2.new(0, 5, 0, 125)
+priorityButton.Size = UDim2.new(1, -10, 0, 30)
+priorityButton.Position = UDim2.new(0, 5, 0, 105)
 priorityButton.Text = "CTR"
 priorityButton.TextScaled = true
-priorityButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+priorityButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
 priorityButton.TextColor3 = Color3.fromRGB(200,200,200)
 priorityButton.BorderSizePixel = 0
 priorityButton.Parent = frame
-
 Instance.new("UICorner", priorityButton).CornerRadius = UDim.new(0.3, 0)
-
 priorityButton.MouseButton1Click:Connect(function()
-    TargetPriority = (TargetPriority == "Center") and "LowestHP" or "Center"
-    priorityButton.Text = (TargetPriority == "Center") and "CTR" or "HP"
+    if TargetPriority == "Center" then
+        TargetPriority = "LowestHP"
+        priorityButton.Text = "HP"
+    else
+        TargetPriority = "Center"
+        priorityButton.Text = "CTR"
+    end
     LockedTarget = nil
 end)
 
--- TARGET CHECK
+-- [Lock Mode: Camera/Character] Button
+local modeButton = Instance.new("TextButton")
+modeButton.Size = UDim2.new(1, -10, 0, 30)
+modeButton.Position = UDim2.new(0, 5, 0, 140)
+modeButton.Text = "MODE: Cam"
+modeButton.TextScaled = true
+modeButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+modeButton.TextColor3 = Color3.fromRGB(200,200,200)
+modeButton.BorderSizePixel = 0
+modeButton.Parent = frame
+Instance.new("UICorner", modeButton).CornerRadius = UDim.new(0.3, 0)
+modeButton.MouseButton1Click:Connect(function()
+    if LockMode == "Camera" then
+        LockMode = "Character"
+        modeButton.Text = "MODE: Char"
+    else
+        LockMode = "Camera"
+        modeButton.Text = "MODE: Cam"
+    end
+end)
+
+-- Validates a HumanoidRootPart target: must exist and be alive
 local function isValidTarget(hrp)
-    if not hrp or not hrp.Parent then return false end
+    if not hrp or not hrp.Parent then 
+        return false 
+    end
     local humanoid = hrp.Parent:FindFirstChildOfClass("Humanoid")
+    -- FindFirstChildOfClass returns the first Humanoid child or nil【42†L109-L116】
     return humanoid and humanoid.Health > 0
 end
 
--- FIND TARGET
+-- Acquire a new target based on priority
 local function getNewTarget()
-    local best, bestValue = nil, math.huge
-    local group = Workspace:FindFirstChild(TargetType.."s")
-    if not group then return nil end
+    local bestTarget, bestValue = nil, math.huge
+    local center2D = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    -- Gather candidates from group or fallback to all workspace models
+    local candidates = {}
+    local container = Workspace:FindFirstChild(TargetType.."s")
+    if container then
+        candidates = container:GetChildren()
+    else
+        -- Fallback: search any Model with a HumanoidRootPart
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                table.insert(candidates, obj)
+            end
+        end
+    end
 
-    for _, char in ipairs(group:GetChildren()) do
+    for _, char in ipairs(candidates) do
         if char ~= LocalPlayer.Character and char:FindFirstChild("HumanoidRootPart") then
             local hrp = char.HumanoidRootPart
             local humanoid = char:FindFirstChildOfClass("Humanoid")
-
             if humanoid and humanoid.Health > 0 then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-
+                -- `onScreen` is true if the point lies within the screen view【30†L53-L56】
                 if onScreen then
                     if TargetPriority == "Center" then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center2D).Magnitude
                         if dist < bestValue then
                             bestValue = dist
-                            best = hrp
+                            bestTarget = hrp
                         end
-                    else
+                    else  -- LowestHP priority
                         if humanoid.Health < bestValue then
                             bestValue = humanoid.Health
-                            best = hrp
+                            bestTarget = hrp
                         end
                     end
                 end
             end
         end
     end
-
-    return best
+    return bestTarget
 end
 
--- LOOP
+-- Main update loop: run each frame
 RunService.RenderStepped:Connect(function()
     if not LockEnabled then return end
-
+    -- If current target invalid or missing, pick a new one
     if not isValidTarget(LockedTarget) then
         LockedTarget = getNewTarget()
     end
-
     if not LockedTarget then return end
 
+    -- Calculate predicted position of the target
     local predicted = LockedTarget.Position + (LockedTarget.Velocity * PredictionMultiplier)
 
-    Camera.CFrame = Camera.CFrame:Lerp(
-        CFrame.lookAt(Camera.CFrame.Position, predicted),
-        Smoothness
-    )
+    if LockMode == "Camera" then
+        -- Smoothly rotate camera to look at target
+        Camera.CFrame = Camera.CFrame:Lerp(
+            CFrame.lookAt(Camera.CFrame.Position, predicted),
+            Smoothness
+        )
+    else
+        -- Smoothly rotate character to face target
+        local char = LocalPlayer.Character
+        local charHRP = char and char:FindFirstChild("HumanoidRootPart")
+        if charHRP then
+            charHRP.CFrame = charHRP.CFrame:Lerp(
+                CFrame.lookAt(charHRP.Position, predicted),
+                Smoothness
+            )
+        end
+    end
 end)
+
