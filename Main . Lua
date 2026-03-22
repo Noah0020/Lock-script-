@@ -1,4 +1,4 @@
--- TARGETSAKEN v9 | Forsaken optimized
+-- TARGETSAKEN HARD LOCK | Optimized Forsaken GUI
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -18,33 +18,6 @@ local TargetPriority = "Center" -- "Center" or "LowestHP"
 local LockedTarget = nil
 
 -- =========================
--- LOADING SCREEN
--- =========================
-local loadGui = Instance.new("ScreenGui")
-loadGui.Name = "TargetsakenLoading"
-loadGui.Parent = PlayerGui
-
-local loadFrame = Instance.new("Frame")
-loadFrame.Size = UDim2.new(0,300,0,150)
-loadFrame.Position = UDim2.new(0.5,-150,0.5,-75)
-loadFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-loadFrame.Parent = loadGui
-Instance.new("UICorner",loadFrame)
-
-local loadText = Instance.new("TextLabel")
-loadText.Size = UDim2.new(1,0,1,0)
-loadText.Text = "TARGETSAKEN"
-loadText.TextScaled = true
-loadText.Font = Enum.Font.SourceSansBold
-loadText.TextColor3 = Color3.fromRGB(255,0,0)
-loadText.BackgroundTransparency = 1
-loadText.Parent = loadFrame
-
-task.delay(2,function()
-    loadGui:Destroy()
-end)
-
--- =========================
 -- TARGET FUNCTIONS
 -- =========================
 local function isValidCharacter(char)
@@ -56,46 +29,29 @@ end
 local function isEnemy(player)
     if player == LocalPlayer then return false end
     if not player.Character then return false end
-    -- Forsaken team detection
-    return true -- always enemies for lock purposes
-end
-
-local function isVisible(targetPart)
-    local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin)
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-    local result = Workspace:Raycast(origin,direction,params)
-    if result then
-        return result.Instance:IsDescendantOf(targetPart.Parent)
-    end
-    return true
+    return true -- Forsaken: always lock enemies
 end
 
 local function getTarget()
     local best,bestValue = nil,math.huge
     local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
-
-    for _, player in ipairs(Players:GetPlayers()) do
+    for _,player in ipairs(Players:GetPlayers()) do
         if isEnemy(player) then
             local char = player.Character
             if isValidCharacter(char) then
                 local hrp = char.HumanoidRootPart
-                local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen then
-                    if TargetPriority == "Center" then
-                        local dist = (Vector2.new(pos.X,pos.Y)-center).Magnitude
-                        if dist < bestValue then
-                            bestValue = dist
-                            best = hrp
-                        end
-                    else
-                        local hp = char:FindFirstChildOfClass("Humanoid").Health
-                        if hp < bestValue then
-                            bestValue = hp
-                            best = hrp
-                        end
+                local pos,_ = Camera:WorldToViewportPoint(hrp.Position)
+                if TargetPriority == "Center" then
+                    local dist = (Vector2.new(pos.X,pos.Y)-center).Magnitude
+                    if dist < bestValue then
+                        bestValue = dist
+                        best = hrp
+                    end
+                else
+                    local hp = char:FindFirstChildOfClass("Humanoid").Health
+                    if hp < bestValue then
+                        bestValue = hp
+                        best = hrp
                     end
                 end
             end
@@ -105,11 +61,10 @@ local function getTarget()
 end
 
 -- =========================
--- LOCK ON SYSTEM
+-- HARD LOCK SYSTEM
 -- =========================
 RunService.RenderStepped:Connect(function()
     if not LockEnabled then return end
-
     if not LockedTarget or not LockedTarget.Parent then
         LockedTarget = getTarget()
     end
@@ -117,28 +72,17 @@ RunService.RenderStepped:Connect(function()
 
     local camPos = Camera.CFrame.Position
     local targetPos = LockedTarget.Position
-    local dist = (camPos - targetPos).Magnitude
-
-    if dist > 350 then LockedTarget = nil return end
-
     local vel = LockedTarget.AssemblyLinearVelocity or LockedTarget.Velocity
-    local prediction = math.clamp(dist/150,0.12,0.25)
-    local predicted = targetPos + (vel*prediction)
-
-    if not isVisible(LockedTarget) then
-        predicted = targetPos
-    end
-
-    local strength = 0.5
+    local predicted = targetPos + vel * 0.2 -- ability prediction
 
     if LockMode == "Camera" then
-        Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(camPos,predicted),strength)
+        Camera.CFrame = CFrame.lookAt(camPos, predicted)
     else
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
             local flatTarget = Vector3.new(predicted.X,hrp.Position.Y,predicted.Z)
-            hrp.CFrame = hrp.CFrame:Lerp(CFrame.lookAt(hrp.Position,flatTarget),strength)
+            hrp.CFrame = CFrame.lookAt(hrp.Position, flatTarget)
         end
     end
 end)
@@ -152,15 +96,28 @@ gui.ResetOnSpawn = false
 gui.Parent = PlayerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,240,0,170)
-frame.Position = UDim2.new(0.7,0,0.6,0)
+frame.Size = UDim2.new(0,220,0,150)
+frame.Position = UDim2.new(0.75,0,0.6,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.Parent = gui
 Instance.new("UICorner",frame)
 
+-- Header
+local header = Instance.new("TextLabel")
+header.Size = UDim2.new(1,0,0,30)
+header.Position = UDim2.new(0,0,0,0)
+header.Text = "TARGETSAKEN"
+header.TextScaled = true
+header.Font = Enum.Font.SourceSansBold
+header.TextColor3 = Color3.fromRGB(255,0,0)
+header.BackgroundTransparency = 0.2
+header.Parent = frame
+Instance.new("UICorner",header)
+
+-- Helper to make buttons
 local function makeBtn(text,y)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1,-10,0,32)
+    b.Size = UDim2.new(1,-10,0,28)
     b.Position = UDim2.new(0,5,0,y)
     b.Text = text
     b.BackgroundColor3 = Color3.fromRGB(50,50,50)
@@ -170,25 +127,28 @@ local function makeBtn(text,y)
     return b
 end
 
-local lockBtn = makeBtn("OFF",10)
-local modeBtn = makeBtn("MODE: CAM",50)
-local prioBtn = makeBtn("CENTER",90)
+local lockBtn = makeBtn("LOCK: OFF",40)
+local modeBtn = makeBtn("MODE: CAM",70)
+local prioBtn = makeBtn("PRIORITY: CENTER",100)
 
-local toggle = Instance.new("TextButton")
-toggle.Size = UDim2.new(0,40,0,40)
-toggle.Position = UDim2.new(0.7,0,0.55,0)
-toggle.Text = "≡"
-toggle.Parent = gui
+-- Open/Close Button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0,30,0,30)
+toggleBtn.Position = UDim2.new(0.75,0,0.55,0)
+toggleBtn.Text = "-"
+toggleBtn.Parent = gui
 
-local visible = true
-toggle.MouseButton1Click:Connect(function()
-    visible = not visible
-    frame.Visible = visible
+local guiVisible = true
+toggleBtn.MouseButton1Click:Connect(function()
+    guiVisible = not guiVisible
+    frame.Visible = guiVisible
+    toggleBtn.Text = guiVisible and "-" or "+"
 end)
 
+-- BUTTON LOGIC
 lockBtn.MouseButton1Click:Connect(function()
     LockEnabled = not LockEnabled
-    lockBtn.Text = LockEnabled and "ON" or "OFF"
+    lockBtn.Text = LockEnabled and "LOCK: ON" or "LOCK: OFF"
     if not LockEnabled then LockedTarget = nil end
 end)
 
@@ -205,10 +165,10 @@ end)
 prioBtn.MouseButton1Click:Connect(function()
     if TargetPriority == "Center" then
         TargetPriority = "LowestHP"
-        prioBtn.Text = "LOW HP"
+        prioBtn.Text = "PRIORITY: LOW HP"
     else
         TargetPriority = "Center"
-        prioBtn.Text = "CENTER"
+        prioBtn.Text = "PRIORITY: CENTER"
     end
     LockedTarget = nil
 end)
