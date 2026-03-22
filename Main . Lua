@@ -1,4 +1,4 @@
--- TARGETSAKEN FULL SCRIPT | Hard Lock + Adjustable Prediction
+-- TARGETSAKEN FULL SCRIPT | Hard Lock + Camera + Character + Prediction
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -11,10 +11,8 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- SETTINGS
 local LockEnabled = false
-local LockMode = "Camera"       -- "Camera" or "Character"
 local TargetPriority = "Center" -- "Center" or "LowestHP"
 local LockedTarget = nil
-
 local PredictionFactor = 0.25
 local BodyOffset = Vector3.new(0,2,0)
 local CameraDistance = 12
@@ -61,32 +59,29 @@ local function getTarget()
     return best
 end
 
--- HARD LOCK LOOP
+-- HARD LOCK LOOP (Camera + Character)
 RunService.RenderStepped:Connect(function()
     if not LockEnabled then return end
+    local char = LocalPlayer.Character
+    local charHRP = char and char:FindFirstChild("HumanoidRootPart")
+    if not charHRP then return end
+
     if not LockedTarget or not LockedTarget.Parent then
         LockedTarget = getTarget()
     end
     if not LockedTarget then return end
 
-    local char = LocalPlayer.Character
-    local charHRP = char and char:FindFirstChild("HumanoidRootPart")
-    if not charHRP then return end
-
     local targetHRP = LockedTarget
     local vel = targetHRP.AssemblyLinearVelocity or targetHRP.Velocity
-    -- predicted position + body offset
     local predicted = targetHRP.Position + vel * PredictionFactor + BodyOffset
 
-    if LockMode == "Camera" then
-        -- CAMERA BEHIND PLAYER
-        local behindPos = charHRP.Position - charHRP.CFrame.LookVector * CameraDistance + Vector3.new(0,CameraHeight,0)
-        Camera.CFrame = CFrame.new(behindPos, predicted)
-    else
-        -- CHARACTER HARD LOCK
-        local flatTarget = Vector3.new(predicted.X, charHRP.Position.Y, predicted.Z)
-        charHRP.CFrame = CFrame.lookAt(charHRP.Position, flatTarget)
-    end
+    -- CHARACTER HARD LOCK
+    local flatTarget = Vector3.new(predicted.X,charHRP.Position.Y,predicted.Z)
+    charHRP.CFrame = CFrame.lookAt(charHRP.Position,flatTarget)
+
+    -- CAMERA HARD LOCK (behind player)
+    local behindPos = charHRP.Position - charHRP.CFrame.LookVector*CameraDistance + Vector3.new(0,CameraHeight,0)
+    Camera.CFrame = CFrame.new(behindPos, predicted)
 end)
 
 -- GUI SETUP
@@ -96,13 +91,13 @@ gui.ResetOnSpawn = false
 gui.Parent = PlayerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,250,0,240) -- extended height for slider
+frame.Size = UDim2.new(0,250,0,240)
 frame.Position = UDim2.new(0.7,0,0.6,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.Parent = gui
 Instance.new("UICorner",frame)
 
--- Header
+-- HEADER
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1,0,0,30)
 header.Position = UDim2.new(0,0,0,0)
@@ -128,15 +123,16 @@ local function makeBtn(text,y)
 end
 
 local lockBtn = makeBtn("LOCK: OFF",40)
-local modeBtn = makeBtn("MODE: CAM",70)
-local prioBtn = makeBtn("PRIORITY: CENTER",100)
+local prioBtn = makeBtn("PRIORITY: CENTER",70)
 
--- OPEN/CLOSE BUTTON
+-- OPEN/CLOSE BUTTON (DRAGGABLE)
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0,30,0,30)
 toggleBtn.Position = UDim2.new(0.7,0,0.55,0)
 toggleBtn.Text = "-"
 toggleBtn.Parent = gui
+toggleBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+Instance.new("UICorner", toggleBtn)
 
 local guiVisible = true
 toggleBtn.MouseButton1Click:Connect(function()
@@ -145,10 +141,10 @@ toggleBtn.MouseButton1Click:Connect(function()
     toggleBtn.Text = guiVisible and "-" or "+"
 end)
 
--- PREDICTION SLIDER (fixed visibility)
+-- PREDICTION SLIDER
 local predLabel = Instance.new("TextLabel")
 predLabel.Size = UDim2.new(1,-10,0,20)
-predLabel.Position = UDim2.new(0,5,0,135)
+predLabel.Position = UDim2.new(0,5,0,120)
 predLabel.Text = "Prediction: "..PredictionFactor
 predLabel.TextScaled = true
 predLabel.Font = Enum.Font.SourceSans
@@ -158,12 +154,13 @@ predLabel.Parent = frame
 
 local predSlider = Instance.new("TextButton")
 predSlider.Size = UDim2.new(1,-10,0,20)
-predSlider.Position = UDim2.new(0,5,0,160)
+predSlider.Position = UDim2.new(0,5,0,145)
 predSlider.BackgroundColor3 = Color3.fromRGB(70,70,70)
 predSlider.Text = ""
 predSlider.Parent = frame
 Instance.new("UICorner", predSlider)
 
+-- DRAGGING PREDICTION SLIDER
 local draggingSlider = false
 predSlider.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -178,8 +175,34 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
         local mouseX = math.clamp(input.Position.X - predSlider.AbsolutePosition.X, 0, predSlider.AbsoluteSize.X)
-        PredictionFactor = 1 + (mouseX / predSlider.AbsoluteSize.X) * 9 -- maps 1 to 10
+        PredictionFactor = 1 + (mouseX / predSlider.AbsoluteSize.X) * 9
         predLabel.Text = string.format("Prediction: %.2f", PredictionFactor)
+    end
+end)
+
+-- DRAGGABLE GUI FRAME
+local dragging, dragStart, startPos = false, nil, nil
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+frame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
     end
 end)
 
@@ -188,16 +211,6 @@ lockBtn.MouseButton1Click:Connect(function()
     LockEnabled = not LockEnabled
     lockBtn.Text = LockEnabled and "LOCK: ON" or "LOCK: OFF"
     if not LockEnabled then LockedTarget = nil end
-end)
-
-modeBtn.MouseButton1Click:Connect(function()
-    if LockMode == "Camera" then
-        LockMode = "Character"
-        modeBtn.Text = "MODE: CHAR"
-    else
-        LockMode = "Camera"
-        modeBtn.Text = "MODE: CAM"
-    end
 end)
 
 prioBtn.MouseButton1Click:Connect(function()
@@ -209,30 +222,4 @@ prioBtn.MouseButton1Click:Connect(function()
         prioBtn.Text = "PRIORITY: CENTER"
     end
     LockedTarget = nil
-end)
-
--- DRAGGABLE GUI
-local dragging, dragStart, startPos = false, nil, nil
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-    end
-end)
-frame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
 end)
