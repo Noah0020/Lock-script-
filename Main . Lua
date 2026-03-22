@@ -1,247 +1,248 @@
---!nocheck
---!nolint
+-- TARGETSAKEN v9 | Forsaken optimized
 
-if string.split(identifyexecutor() or "None", " ")[1] == "Xeno" then
-    getgenv().WebSocket = nil
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- =========================
+-- SETTINGS
+-- =========================
+local LockEnabled = false
+local LockMode = "Camera"       -- "Camera" or "Character"
+local TargetPriority = "Center" -- "Center" or "LowestHP"
+local LockedTarget = nil
+
+-- =========================
+-- LOADING SCREEN
+-- =========================
+local loadGui = Instance.new("ScreenGui")
+loadGui.Name = "TargetsakenLoading"
+loadGui.Parent = PlayerGui
+
+local loadFrame = Instance.new("Frame")
+loadFrame.Size = UDim2.new(0,300,0,150)
+loadFrame.Position = UDim2.new(0.5,-150,0.5,-75)
+loadFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+loadFrame.Parent = loadGui
+Instance.new("UICorner",loadFrame)
+
+local loadText = Instance.new("TextLabel")
+loadText.Size = UDim2.new(1,0,1,0)
+loadText.Text = "TARGETSAKEN"
+loadText.TextScaled = true
+loadText.Font = Enum.Font.SourceSansBold
+loadText.TextColor3 = Color3.fromRGB(255,0,0)
+loadText.BackgroundTransparency = 1
+loadText.Parent = loadFrame
+
+task.delay(2,function()
+    loadGui:Destroy()
+end)
+
+-- =========================
+-- TARGET FUNCTIONS
+-- =========================
+local function isValidCharacter(char)
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    return hum and hrp and hum.Health > 0
 end
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+local function isEnemy(player)
+    if player == LocalPlayer then return false end
+    if not player.Character then return false end
+    -- Forsaken team detection
+    return true -- always enemies for lock purposes
+end
 
-local Window = Library:CreateWindow({
-    Title = "Targetsaken by Grok ❤️",
-    Footer = "Survivor Ability Hub",
-    ToggleKeybind = Enum.KeyCode.RightControl,
-    MobileButtonsSide = "Left",
-    AutoShow = true,
-    Center = true,
-    Size = UDim2.fromOffset(420, 380)
-})
-
-local Features = {
-    AutoAimAbility = false,
-    CameraLock = false,
-    ESP = false,
-    InfStamina = false,
-    AutoOtherAbilities = false,
-    AutoChange = false
-}
-local RangeValue = 25
-local PredictionValue = 0.25
-local LockTargetType = "Survivor"
-
-local PlayersFolder = Workspace:FindFirstChild("Players")
-local function GetSurvivors() return PlayersFolder and PlayersFolder:FindFirstChild("Survivors") end
-local function GetKillers() return PlayersFolder and PlayersFolder:FindFirstChild("Killers") end
-
-local RayParams = RaycastParams.new()
-RayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-local AbilitiesTab = Window:AddTab("Abilities")
-local AbGroup = AbilitiesTab:AddGroupbox({Name = "Core Features"})
-
-AbGroup:AddToggle({
-    Name = "Auto Aim on Ability Use",
-    Default = false,
-    Callback = function(state) Features.AutoAimAbility = state end
-})
-
-AbGroup:AddToggle({
-    Name = "Camera Lock",
-    Default = false,
-    Callback = function(state) Features.CameraLock = state end
-})
-
-AbGroup:AddDropdown({
-    Name = "Lock Target",
-    Values = {"Survivor", "Killer"},
-    Default = "Survivor",
-    Callback = function(choice) LockTargetType = choice end
-})
-
-AbGroup:AddSlider({
-    Name = "Range",
-    Min = 0,
-    Max = 50,
-    Default = 25,
-    Callback = function(v) RangeValue = v end
-})
-
-AbGroup:AddSlider({
-    Name = "Prediction",
-    Min = 0,
-    Max = 1,
-    Default = 0.25,
-    Callback = function(v) PredictionValue = v end
-})
-
-AbGroup:AddToggle({
-    Name = "Auto Other Abilities",
-    Default = false,
-    Callback = function(state) Features.AutoOtherAbilities = state end
-})
-
-AbGroup:AddToggle({
-    Name = "Auto Change",
-    Default = false,
-    Callback = function(state) Features.AutoChange = state end
-})
-
-local VisualsTab = Window:AddTab("Visuals")
-local VisGroup = VisualsTab:AddGroupbox({Name = "ESP"})
-
-VisGroup:AddToggle({
-    Name = "ESP",
-    Default = false,
-    Callback = function(state) Features.ESP = state end
-})
-
-local MiscTab = Window:AddTab("Misc")
-local MiscGroup = MiscTab:AddGroupbox({Name = "Misc"})
-
-MiscGroup:AddToggle({
-    Name = "Infinite Stamina",
-    Default = false,
-    Callback = function(state) Features.InfStamina = state end
-})
-
-game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
-    if gp or not Features.AutoAimAbility or input.UserInputType \~= Enum.UserInputType.MouseButton1 then return end
-    
-    local myChar = game.Players.LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
-    local myHRP = myChar.HumanoidRootPart
-    
-    RayParams.FilterDescendantsInstances = {myChar}
-    
-    local targetHRP = nil
-    local closest = math.huge
-    
-    local survFolder = GetSurvivors()
-    if survFolder then
-        for _, char in ipairs(survFolder:GetChildren()) do
-            if char \~= myChar and char:FindFirstChild("HumanoidRootPart") then
-                local hrp = char.HumanoidRootPart
-                local dist = (hrp.Position - myHRP.Position).Magnitude
-                if dist <= RangeValue and dist < closest then
-                    local ray = Workspace:Raycast(myHRP.Position, (hrp.Position - myHRP.Position), RayParams)
-                    if not ray or ray.Distance >= dist - 2 then
-                        closest = dist
-                        targetHRP = hrp
-                    end
-                end
-            end
-        end
+local function isVisible(targetPart)
+    local origin = Camera.CFrame.Position
+    local direction = (targetPart.Position - origin)
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local result = Workspace:Raycast(origin,direction,params)
+    if result then
+        return result.Instance:IsDescendantOf(targetPart.Parent)
     end
-    
-    if not targetHRP then
-        local killFolder = GetKillers()
-        if killFolder then
-            for _, char in ipairs(killFolder:GetChildren()) do
-                if char \~= myChar and char:FindFirstChild("HumanoidRootPart") then
-                    local hrp = char.HumanoidRootPart
-                    local dist = (hrp.Position - myHRP.Position).Magnitude
-                    if dist <= RangeValue and dist < closest then
-                        local ray = Workspace:Raycast(myHRP.Position, (hrp.Position - myHRP.Position), RayParams)
-                        if not ray or ray.Distance >= dist - 2 then
-                            closest = dist
-                            targetHRP = hrp
+    return true
+end
+
+local function getTarget()
+    local best,bestValue = nil,math.huge
+    local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if isEnemy(player) then
+            local char = player.Character
+            if isValidCharacter(char) then
+                local hrp = char.HumanoidRootPart
+                local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if onScreen then
+                    if TargetPriority == "Center" then
+                        local dist = (Vector2.new(pos.X,pos.Y)-center).Magnitude
+                        if dist < bestValue then
+                            bestValue = dist
+                            best = hrp
+                        end
+                    else
+                        local hp = char:FindFirstChildOfClass("Humanoid").Health
+                        if hp < bestValue then
+                            bestValue = hp
+                            best = hrp
                         end
                     end
                 end
             end
         end
     end
-    
-    if targetHRP then
-        local predicted = targetHRP.Position + (targetHRP.Velocity * PredictionValue)
-        Workspace.CurrentCamera.CFrame = CFrame.lookAt(Workspace.CurrentCamera.CFrame.Position, predicted)
+    return best
+end
+
+-- =========================
+-- LOCK ON SYSTEM
+-- =========================
+RunService.RenderStepped:Connect(function()
+    if not LockEnabled then return end
+
+    if not LockedTarget or not LockedTarget.Parent then
+        LockedTarget = getTarget()
+    end
+    if not LockedTarget then return end
+
+    local camPos = Camera.CFrame.Position
+    local targetPos = LockedTarget.Position
+    local dist = (camPos - targetPos).Magnitude
+
+    if dist > 350 then LockedTarget = nil return end
+
+    local vel = LockedTarget.AssemblyLinearVelocity or LockedTarget.Velocity
+    local prediction = math.clamp(dist/150,0.12,0.25)
+    local predicted = targetPos + (vel*prediction)
+
+    if not isVisible(LockedTarget) then
+        predicted = targetPos
+    end
+
+    local strength = 0.5
+
+    if LockMode == "Camera" then
+        Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(camPos,predicted),strength)
+    else
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local flatTarget = Vector3.new(predicted.X,hrp.Position.Y,predicted.Z)
+            hrp.CFrame = hrp.CFrame:Lerp(CFrame.lookAt(hrp.Position,flatTarget),strength)
+        end
     end
 end)
 
-game:GetService("RunService").RenderStepped:Connect(function()
-    local myChar = game.Players.LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
-    local myHRP = myChar.HumanoidRootPart
-    local myHum = myChar:FindFirstChildOfClass("Humanoid")
-    
-    if Features.InfStamina and myHum then
-        myHum:SetAttribute("Stamina", 100)
-        local stam = myChar:FindFirstChild("Stamina") or myChar:FindFirstChild("SprintStamina")
-        if stam and stam:IsA("NumberValue") then stam.Value = 100 end
+-- =========================
+-- GUI
+-- =========================
+local gui = Instance.new("ScreenGui")
+gui.Name = "TargetsakenUI"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,240,0,170)
+frame.Position = UDim2.new(0.7,0,0.6,0)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.Parent = gui
+Instance.new("UICorner",frame)
+
+local function makeBtn(text,y)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1,-10,0,32)
+    b.Position = UDim2.new(0,5,0,y)
+    b.Text = text
+    b.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    b.TextColor3 = Color3.new(1,1,1)
+    b.Parent = frame
+    Instance.new("UICorner",b)
+    return b
+end
+
+local lockBtn = makeBtn("OFF",10)
+local modeBtn = makeBtn("MODE: CAM",50)
+local prioBtn = makeBtn("CENTER",90)
+
+local toggle = Instance.new("TextButton")
+toggle.Size = UDim2.new(0,40,0,40)
+toggle.Position = UDim2.new(0.7,0,0.55,0)
+toggle.Text = "≡"
+toggle.Parent = gui
+
+local visible = true
+toggle.MouseButton1Click:Connect(function()
+    visible = not visible
+    frame.Visible = visible
+end)
+
+lockBtn.MouseButton1Click:Connect(function()
+    LockEnabled = not LockEnabled
+    lockBtn.Text = LockEnabled and "ON" or "OFF"
+    if not LockEnabled then LockedTarget = nil end
+end)
+
+modeBtn.MouseButton1Click:Connect(function()
+    if LockMode == "Camera" then
+        LockMode = "Character"
+        modeBtn.Text = "MODE: CHAR"
+    else
+        LockMode = "Camera"
+        modeBtn.Text = "MODE: CAM"
     end
-    
-    if Features.ESP then
-        local survFolder = GetSurvivors()
-        if survFolder then
-            for _, char in ipairs(survFolder:GetChildren()) do
-                if not char:FindFirstChild("Highlight") then
-                    local hl = Instance.new("Highlight")
-                    hl.Adornee = char
-                    hl.FillColor = Color3.fromRGB(0, 255, 0)
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    hl.FillTransparency = 0.6
-                    hl.Parent = char
-                end
-            end
-        end
-        local killFolder = GetKillers()
-        if killFolder then
-            for _, char in ipairs(killFolder:GetChildren()) do
-                if not char:FindFirstChild("Highlight") then
-                    local hl = Instance.new("Highlight")
-                    hl.Adornee = char
-                    hl.FillColor = Color3.fromRGB(255, 0, 0)
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    hl.FillTransparency = 0.6
-                    hl.Parent = char
-                end
-            end
-        end
+end)
+
+prioBtn.MouseButton1Click:Connect(function()
+    if TargetPriority == "Center" then
+        TargetPriority = "LowestHP"
+        prioBtn.Text = "LOW HP"
+    else
+        TargetPriority = "Center"
+        prioBtn.Text = "CENTER"
     end
-    
-    if Features.CameraLock then
-        local targetHRP = nil
-        local closest = math.huge
-        RayParams.FilterDescendantsInstances = {myChar}
-        
-        local folder = (LockTargetType == "Survivor") and GetSurvivors() or GetKillers()
-        if folder then
-            for _, char in ipairs(folder:GetChildren()) do
-                if char \~= myChar and char:FindFirstChild("HumanoidRootPart") then
-                    local hrp = char.HumanoidRootPart
-                    local dist = (hrp.Position - myHRP.Position).Magnitude
-                    if dist <= RangeValue and dist < closest then
-                        local ray = Workspace:Raycast(myHRP.Position, (hrp.Position - myHRP.Position), RayParams)
-                        if not ray or ray.Distance >= dist - 2 then
-                            closest = dist
-                            targetHRP = hrp
-                        end
-                    end
-                end
-            end
-        end
-        
-        if targetHRP then
-            local predicted = targetHRP.Position + (targetHRP.Velocity * PredictionValue)
-            Workspace.CurrentCamera.CFrame = CFrame.lookAt(Workspace.CurrentCamera.CFrame.Position, predicted)
-        end
+    LockedTarget = nil
+end)
+
+-- =========================
+-- DRAGGABLE FRAME
+-- =========================
+local dragging, dragStart, startPos = false, nil, nil
+
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
     end
-    
-    if Features.AutoOtherAbilities then
-        for _, tool in ipairs(myChar:GetChildren()) do
-            if tool:IsA("Tool") and (tool.Name:lower():find("rage") or tool.Name:lower():find("eye") or tool.Name:lower():find("pizza") or tool.Name:lower():find("404")) then
-                tool:Activate()
-            end
-        end
+end)
+
+frame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
     end
-    if Features.AutoChange then
-        for _, tool in ipairs(myChar:GetChildren()) do
-            if tool:IsA("Tool") then
-                tool.Parent = game.Players.LocalPlayer.Backpack
-                task.wait(0.5)
-                tool.Parent = myChar
-                break
-            end
-        end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
     end
 end)
