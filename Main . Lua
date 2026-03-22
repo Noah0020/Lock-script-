@@ -1,253 +1,289 @@
+-- TARGETSAKEN v4 | Full working lock + GUI
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- SETTINGS
-local LockEnabled = false
-local PredictionMultiplier = 0.3
-local TargetType = "Survivor"
-local TargetPriority = "Center"
-local LockedTarget = nil
+-- Clean previous GUIs
+for _, name in ipairs({"TargetsakenLoading","TargetsakenUI"}) do
+    local old = PlayerGui:FindFirstChild(name)
+    if old then old:Destroy() end
+end
 
 -- ===== LOADING SCREEN =====
 local loadingGui = Instance.new("ScreenGui")
-loadingGui.Name = "LoadingScreen"
-loadingGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+loadingGui.Name = "TargetsakenLoading"
 loadingGui.ResetOnSpawn = false
+loadingGui.Parent = PlayerGui
 
-local bgLoad = Instance.new("Frame")
-bgLoad.Size = UDim2.new(1,0,1,0)
-bgLoad.BackgroundColor3 = Color3.fromRGB(15,15,15)
-bgLoad.BorderSizePixel = 0
-bgLoad.Parent = loadingGui
+local bg = Instance.new("Frame")
+bg.Size = UDim2.fromScale(1,1)
+bg.BackgroundColor3 = Color3.fromRGB(15,15,15)
+bg.BorderSizePixel = 0
+bg.Parent = loadingGui
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1,0,0,100)
 title.Position = UDim2.new(0,0,0.4,0)
+title.BackgroundTransparency = 1
 title.Text = "TARGETSAKEN"
 title.TextScaled = true
 title.Font = Enum.Font.SourceSansBold
 title.TextColor3 = Color3.new(1,1,1)
-title.BackgroundTransparency = 1
-title.Parent = bgLoad
+title.Parent = bg
 
 local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1,0,0,40)
-status.Position = UDim2.new(0,0,0.55,0)
+status.Size = UDim2.new(1,0,0,30)
+status.Position = UDim2.new(0,0,0.52,0)
+status.BackgroundTransparency = 1
 status.Text = "Loading..."
 status.TextScaled = true
 status.Font = Enum.Font.SourceSans
 status.TextColor3 = Color3.fromRGB(200,200,200)
-status.BackgroundTransparency = 1
-status.Parent = bgLoad
+status.Parent = bg
 
--- SIMULATED LOADING
 task.spawn(function()
-    local texts = {
-        "Loading modules...",
-        "Preparing UI...",
-        "Setting up systems...",
-        "Finalizing..."
-    }
-
-    for _, text in ipairs(texts) do
-        status.Text = text
-        task.wait(0.5)
+    for i,text in ipairs({"Modules...","UI...","Systems...","Finalizing..."}) do
+        status.Text = "Loading "..text
+        task.wait(0.35)
     end
+    task.wait(0.3)
+    loadingGui:Destroy()
 end)
 
-task.wait(2.5)
-loadingGui:Destroy()
+task.wait(2)
 
 -- ===== MAIN GUI =====
 local gui = Instance.new("ScreenGui")
-gui.Name = "LockUI"
-gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+gui.Name = "TargetsakenUI"
 gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
 
--- BACKGROUND IMAGE
-local bg = Instance.new("ImageLabel")
-bg.Size = UDim2.new(0, 180, 0, 140)
-bg.Position = UDim2.new(0.75, 0, 0.6, 0)
-bg.Image = "rbxassetid://92460766977717"  -- your decal
-bg.ScaleType = Enum.ScaleType.Stretch
-bg.BackgroundTransparency = 1
-bg.Parent = gui
+-- Main frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,220,0,180)
+frame.Position = UDim2.new(0.75,0,0.6,0)
+frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+frame.BackgroundTransparency = 0.15
+frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
+frame.Parent = gui
+Instance.new("UICorner",frame).CornerRadius=UDim.new(0,8)
+local stroke=Instance.new("UIStroke")
+stroke.Thickness=1
+stroke.Color=Color3.fromRGB(255,255,255)
+stroke.Transparency=0.7
+stroke.Parent=frame
 
--- DRAG
-local dragging, dragInput, startPos, startFramePos
-bg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        startPos = input.Position
-        startFramePos = bg.Position
-    end
-end)
+-- Background image
+local bgImage = Instance.new("ImageLabel")
+bgImage.Size = UDim2.fromScale(1,1)
+bgImage.Position = UDim2.fromScale(0,0)
+bgImage.BackgroundTransparency = 1
+bgImage.Image = "rbxassetid://92460766977717"
+bgImage.ScaleType = Enum.ScaleType.Stretch
+bgImage.ZIndex = 1
+bgImage.Parent = frame
 
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - startPos
-        bg.Position = UDim2.new(
-            startFramePos.X.Scale,
-            startFramePos.X.Offset + delta.X,
-            startFramePos.Y.Scale,
-            startFramePos.Y.Offset + delta.Y
-        )
-    end
-end)
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.fromScale(1,1)
+overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
+overlay.BackgroundTransparency = 0.4
+overlay.BorderSizePixel = 0
+overlay.ZIndex = 2
+overlay.Parent = frame
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
--- HEADER
+-- Header
 local header = Instance.new("TextLabel")
-header.Size = UDim2.new(1, -10, 0, 25)
-header.Position = UDim2.new(0, 5, 0, 5)
-header.Text = "Targetsaken"
+header.Size = UDim2.new(1,-10,0,28)
+header.Position = UDim2.new(0,5,0,5)
+header.BackgroundColor3 = Color3.fromRGB(35,35,35)
+header.BackgroundTransparency = 0.15
+header.BorderSizePixel = 0
+header.Text = "TARGETSAKEN"
 header.TextScaled = true
 header.Font = Enum.Font.SourceSansBold
-header.BackgroundTransparency = 1
 header.TextColor3 = Color3.new(1,1,1)
-header.Parent = bg
+header.ZIndex = 3
+header.Parent = frame
+Instance.new("UICorner",header).CornerRadius=UDim.new(0,6)
 
--- LOCK BUTTON
-local lockButton = Instance.new("TextButton")
-lockButton.Size = UDim2.new(0.48, -5, 0, 40)
-lockButton.Position = UDim2.new(0, 5, 0, 35)
-lockButton.Text = "OFF"
-lockButton.TextScaled = true
-lockButton.BackgroundTransparency = 0.3
-lockButton.TextColor3 = Color3.new(1,1,1)
-lockButton.Parent = bg
-
--- TYPE BUTTON
-local typeButton = Instance.new("TextButton")
-typeButton.Size = UDim2.new(0.48, -5, 0, 40)
-typeButton.Position = UDim2.new(0.52, 0, 0, 35)
-typeButton.Text = "SURV"
-typeButton.TextScaled = true
-typeButton.BackgroundTransparency = 0.3
-typeButton.TextColor3 = Color3.new(1,1,1)
-typeButton.Parent = bg
-
--- PRIORITY BUTTON
-local priorityButton = Instance.new("TextButton")
-priorityButton.Size = UDim2.new(1, -10, 0, 40)
-priorityButton.Position = UDim2.new(0, 5, 0, 85)
-priorityButton.Text = "CENTER"
-priorityButton.TextScaled = true
-priorityButton.BackgroundTransparency = 0.3
-priorityButton.TextColor3 = Color3.new(1,1,1)
-priorityButton.Parent = bg
-
--- BUTTON LOGIC
-lockButton.MouseButton1Click:Connect(function()
-    LockEnabled = not LockEnabled
-    lockButton.Text = LockEnabled and "ON" or "OFF"
-    if not LockEnabled then LockedTarget = nil end
-end)
-
-typeButton.MouseButton1Click:Connect(function()
-    TargetType = (TargetType == "Survivor") and "Killer" or "Survivor"
-    typeButton.Text = (TargetType == "Survivor") and "SURV" or "KILL"
-    LockedTarget = nil
-end)
-
-priorityButton.MouseButton1Click:Connect(function()
-    TargetPriority = (TargetPriority == "Center") and "LowestHP" or "Center"
-    priorityButton.Text = (TargetPriority == "Center") and "CENTER" or "LOW HP"
-    LockedTarget = nil
-end)
-
--- GET GROUP
-local function getGroup()
-    if TargetType == "Killer" then
-        return Workspace:FindFirstChild("Killers")
-    else
-        return Workspace:FindFirstChild("Survivors")
-    end
+-- Button creator
+local function createButton(text,y)
+    local btn=Instance.new("TextButton")
+    btn.Size=UDim2.new(1,-10,0,28)
+    btn.Position=UDim2.new(0,5,0,y)
+    btn.BackgroundColor3=Color3.fromRGB(50,50,50)
+    btn.BackgroundTransparency=0.05
+    btn.BorderSizePixel=0
+    btn.Text=text
+    btn.TextScaled=true
+    btn.Font=Enum.Font.SourceSansSemibold
+    btn.TextColor3=Color3.new(1,1,1)
+    btn.AutoButtonColor=true
+    btn.ZIndex=3
+    btn.Parent=frame
+    Instance.new("UICorner",btn).CornerRadius=UDim.new(0,6)
+    return btn
 end
 
--- VALID TARGET
+local lockButton=createButton("OFF",40)
+local typeButton=createButton("SURV",73)
+local priorityButton=createButton("CTR",106)
+local modeButton=createButton("MODE: Cam",139)
+
+-- Drag frame
+do
+    local dragging=false
+    local dragInput
+    local dragStart
+    local startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 then
+            dragging=true
+            dragStart=input.Position
+            startPos=frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState==Enum.UserInputState.End then dragging=false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseMovement then dragInput=input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input==dragInput then
+            local delta=input.Position-dragStart
+            frame.Position=UDim2.new(
+                startPos.X.Scale,startPos.X.Offset+delta.X,
+                startPos.Y.Scale,startPos.Y.Offset+delta.Y
+            )
+        end
+    end)
+end
+
+-- ===== LOCK SYSTEM =====
+local LockEnabled=false
+local LockMode="Camera" -- Camera/Character
+local TargetType="Survivor" -- Survivor/Killer
+local TargetPriority="Center" -- Center/LowestHP
+local LockedTarget=nil
+local Smoothness=0.18
+local PredictionMultiplier=0.25
+
+-- Helpers
 local function isValidTarget(hrp)
     if not hrp or not hrp.Parent then return false end
-    local humanoid = hrp.Parent:FindFirstChildOfClass("Humanoid")
-    return humanoid and humanoid.Health > 0
+    local humanoid=hrp.Parent:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid.Health>0
 end
 
--- FIND TARGET
 local function getNewTarget()
-    local group = getGroup()
-    if not group then return nil end
-
-    local best, bestValue = nil, math.huge
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-
-    for _, char in ipairs(group:GetChildren()) do
-        if char ~= LocalPlayer.Character and char:FindFirstChild("HumanoidRootPart") then
-            local hrp = char.HumanoidRootPart
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-
-            if humanoid and humanoid.Health > 0 then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-
+    local bestTarget,bestValue=nil,math.huge
+    local center2D=Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local container=Workspace:FindFirstChild(TargetType.."s")
+    local candidates={}
+    if container then
+        candidates=container:GetChildren()
+    else
+        for _,obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                table.insert(candidates,obj)
+            end
+        end
+    end
+    for _,char in ipairs(candidates) do
+        if char~=LocalPlayer.Character and char:FindFirstChild("HumanoidRootPart") then
+            local hrp=char.HumanoidRootPart
+            local humanoid=char:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health>0 then
+                local screenPos,onScreen=Camera:WorldToViewportPoint(hrp.Position)
                 if onScreen then
-                    if TargetPriority == "Center" then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                        if dist < bestValue then
-                            bestValue = dist
-                            best = hrp
+                    if TargetPriority=="Center" then
+                        local dist=(Vector2.new(screenPos.X,screenPos.Y)-center2D).Magnitude
+                        if dist<bestValue then
+                            bestValue=dist
+                            bestTarget=hrp
                         end
-                    else
-                        if humanoid.Health < bestValue then
-                            bestValue = humanoid.Health
-                            best = hrp
+                    else -- LowestHP
+                        if humanoid.Health<bestValue then
+                            bestValue=humanoid.Health
+                            bestTarget=hrp
                         end
                     end
                 end
             end
         end
     end
-
-    return best
+    return bestTarget
 end
 
--- HARD LOCK LOOP
+-- Main update
 RunService.RenderStepped:Connect(function()
     if not LockEnabled then return end
-
     if not isValidTarget(LockedTarget) then
-        LockedTarget = getNewTarget()
+        LockedTarget=getNewTarget()
     end
-
     if not LockedTarget then return end
 
-    local predicted = LockedTarget.Position + (LockedTarget.Velocity * PredictionMultiplier)
-    local camPos = Camera.CFrame.Position
-    local distance = (predicted - camPos).Magnitude
-
-    local strength
-    if distance < 20 then
-        strength = 0.6
-    elseif distance < 50 then
-        strength = 0.4
-    else
-        strength = 0.25
-    end
-
-    if distance < 12 then
-        Camera.CFrame = CFrame.lookAt(camPos, predicted)
-    else
-        Camera.CFrame = Camera.CFrame:Lerp(
-            CFrame.lookAt(camPos, predicted),
-            strength
+    local predicted=LockedTarget.Position + (LockedTarget.Velocity*PredictionMultiplier)
+    if LockMode=="Camera" then
+        Camera.CFrame=Camera.CFrame:Lerp(
+            CFrame.lookAt(Camera.CFrame.Position,predicted),
+            Smoothness
         )
+    else
+        local char=LocalPlayer.Character
+        local charHRP=char and char:FindFirstChild("HumanoidRootPart")
+        if charHRP then
+            charHRP.CFrame=charHRP.CFrame:Lerp(
+                CFrame.lookAt(charHRP.Position,predicted),
+                Smoothness
+            )
+        end
+    end
+end)
+
+-- ===== BUTTON FUNCTIONS =====
+lockButton.MouseButton1Click:Connect(function()
+    LockEnabled=not LockEnabled
+    lockButton.Text=LockEnabled and "ON" or "OFF"
+    if not LockEnabled then LockedTarget=nil end
+end)
+
+typeButton.MouseButton1Click:Connect(function()
+    if TargetType=="Survivor" then
+        TargetType="Killer"
+        typeButton.Text="KILL"
+    else
+        TargetType="Survivor"
+        typeButton.Text="SURV"
+    end
+    LockedTarget=nil
+end)
+
+priorityButton.MouseButton1Click:Connect(function()
+    if TargetPriority=="Center" then
+        TargetPriority="LowestHP"
+        priorityButton.Text="HP"
+    else
+        TargetPriority="Center"
+        priorityButton.Text="CTR"
+    end
+    LockedTarget=nil
+end)
+
+modeButton.MouseButton1Click:Connect(function()
+    if LockMode=="Camera" then
+        LockMode="Character"
+        modeButton.Text="MODE: Char"
+    else
+        LockMode="Camera"
+        modeButton.Text="MODE: Cam"
     end
 end)
