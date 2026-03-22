@@ -1,246 +1,211 @@
--- TARGETSAKEN v8 | FULLY FIXED (Mobile + PC)
+-- Targetsaken by Grok ❤️ - GUI Closable + Draggable + All Buttons Active + NOTHING starts ON
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-
-local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
 
--- SETTINGS
-local LockEnabled = false
-local LockMode = "Camera"
-local TargetPriority = "Center"
-local LockedTarget = nil
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("Targetsaken by Grok ❤️", "DarkTheme")
 
--- =========================
--- 🧠 TARGET SYSTEM
--- =========================
+local AbilitiesTab = Window:NewTab("Abilities")
+local VisualsTab = Window:NewTab("Visuals")
+local MiscTab = Window:NewTab("Misc")
 
-local function isValidCharacter(char)
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    return hum and hrp and hum.Health > 0
-end
+-- ALL FEATURES START OFF (nothing activates in advance)
+local Features = {
+    AutoAimAbility = false,
+    AutoOtherAbilities = false,
+    AutoChange = false,
+    ESP = false,
+    InfStamina = false,
+    CameraLock = false
+}
+local RangeValue = 25
+local PredictionValue = 0.25
+local LockTargetType = "Survivor"
+local Highlights = {}
+local RayParams = RaycastParams.new()
+RayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function isEnemy(player)
-    if player == LocalPlayer then return false end
-    if not player.Character then return false end
+-- Safe folder helpers (re-checked 3x)
+local PlayersFolder = Workspace:FindFirstChild("Players")
+local function GetSurvivors() return PlayersFolder and PlayersFolder:FindFirstChild("Survivors") end
+local function GetKillers() return PlayersFolder and PlayersFolder:FindFirstChild("Killers") end
 
-    if player.Team and LocalPlayer.Team then
-        return player.Team ~= LocalPlayer.Team
-    end
+-- Abilities Tab (all buttons active)
+local AbSection = AbilitiesTab:NewSection("Core Features")
+AbSection:NewToggle("Auto Aim on Ability Use", "Aims ONLY when you click/use ability", function(state) Features.AutoAimAbility = state end)
+AbSection:NewToggle("Camera Lock", "Constantly locks camera on target", function(state) Features.CameraLock = state end)
+AbSection:NewDropdown("Lock Target", {"Survivor", "Killer"}, function(choice) LockTargetType = choice end, "Survivor")
+AbSection:NewSlider("Range", "Max range (studs)", 0, 50, RangeValue, function(v) RangeValue = v end, true)
+AbSection:NewSlider("Prediction", "Aim prediction", 0, 1, PredictionValue, function(v) PredictionValue = v end, true)
+AbSection:NewToggle("Auto Other Abilities", "Auto Raging Pace / Eye / Pizza / 404 etc.", function(state) Features.AutoOtherAbilities = state end)
+AbSection:NewToggle("Auto Change", "Cycles abilities", function(state) Features.AutoChange = state end)
 
-    return true
-end
+-- Visuals Tab
+local VisSection = VisualsTab:NewSection("Visuals")
+VisSection:NewToggle("ESP", "Highlights everyone", function(state) Features.ESP = state end)
 
-local function isVisible(targetPart)
-    local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin)
+-- Misc Tab
+local MiscSection = MiscTab:NewSection("Misc")
+MiscSection:NewToggle("Infinite Stamina", "Never runs out", function(state) Features.InfStamina = state end)
 
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-
-    local result = Workspace:Raycast(origin, direction, params)
-
-    if result then
-        return result.Instance:IsDescendantOf(targetPart.Parent)
-    end
-
-    return true
-end
-
-local function getTarget()
-    local best, bestValue = nil, math.huge
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if isEnemy(player) then
-            local char = player.Character
-
-            if isValidCharacter(char) then
+-- Auto Aim ONLY when you use ability (left click)
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp or not Features.AutoAimAbility or input.UserInputType \~= Enum.UserInputType.MouseButton1 then return end
+    
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+    local myHRP = myChar.HumanoidRootPart
+    
+    RayParams.FilterDescendantsInstances = {myChar}
+    
+    local targetHRP = nil
+    local closest = math.huge
+    
+    -- Survivors first
+    local survFolder = GetSurvivors()
+    if survFolder then
+        for _, char in ipairs(survFolder:GetChildren()) do
+            if char \~= myChar and char:FindFirstChild("HumanoidRootPart") then
                 local hrp = char.HumanoidRootPart
-                local pos, visible = Camera:WorldToViewportPoint(hrp.Position)
-
-                if visible then
-                    if TargetPriority == "Center" then
-                        local dist = (Vector2.new(pos.X,pos.Y) - center).Magnitude
-                        if dist < bestValue then
-                            bestValue = dist
-                            best = hrp
-                        end
-                    else
-                        local hp = char:FindFirstChildOfClass("Humanoid").Health
-                        if hp < bestValue then
-                            bestValue = hp
-                            best = hrp
+                local dist = (hrp.Position - myHRP.Position).Magnitude
+                if dist <= RangeValue and dist < closest then
+                    local ray = Workspace:Raycast(myHRP.Position, (hrp.Position - myHRP.Position), RayParams)
+                    if not ray or ray.Distance >= dist - 2 then
+                        closest = dist
+                        targetHRP = hrp
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Killer if no survivor found
+    if not targetHRP then
+        local killFolder = GetKillers()
+        if killFolder then
+            for _, char in ipairs(killFolder:GetChildren()) do
+                if char \~= myChar and char:FindFirstChild("HumanoidRootPart") then
+                    local hrp = char.HumanoidRootPart
+                    local dist = (hrp.Position - myHRP.Position).Magnitude
+                    if dist <= RangeValue and dist < closest then
+                        local ray = Workspace:Raycast(myHRP.Position, (hrp.Position - myHRP.Position), RayParams)
+                        if not ray or ray.Distance >= dist - 2 then
+                            closest = dist
+                            targetHRP = hrp
                         end
                     end
                 end
             end
         end
     end
+    
+    if targetHRP then
+        local predicted = targetHRP.Position + (targetHRP.Velocity * PredictionValue)
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, predicted)
+    end
+end)
 
-    return best
-end
-
--- =========================
--- 🔒 LOCK SYSTEM (FINAL)
--- =========================
-
+-- Main Loop (only runs what you turn ON)
 RunService.RenderStepped:Connect(function()
-    if not LockEnabled then return end
-
-    if not LockedTarget or not LockedTarget.Parent then
-        LockedTarget = getTarget()
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+    local myHRP = myChar.HumanoidRootPart
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    
+    -- Infinite Stamina (only if toggled)
+    if Features.InfStamina and myHum then
+        myHum:SetAttribute("Stamina", 100)
+        local stam = myChar:FindFirstChild("Stamina") or myChar:FindFirstChild("SprintStamina")
+        if stam and stam:IsA("NumberValue") then stam.Value = 100 end
     end
-
-    if not LockedTarget then return end
-
-    local camPos = Camera.CFrame.Position
-    local targetPos = LockedTarget.Position
-
-    local dist = (camPos - targetPos).Magnitude
-
-    if dist > 350 then
-        LockedTarget = nil
-        return
-    end
-
-    local vel = LockedTarget.AssemblyLinearVelocity or LockedTarget.Velocity
-    local prediction = math.clamp(dist / 150, 0.12, 0.25)
-    local predicted = targetPos + (vel * prediction)
-
-    if not isVisible(LockedTarget) then
-        predicted = targetPos
-    end
-
-    if LockMode == "Camera" then
-        local lookCF = CFrame.lookAt(camPos, predicted)
-        Camera.CFrame = Camera.CFrame:Lerp(lookCF, 0.45)
+    
+    -- ESP (only if toggled)
+    if Features.ESP then
+        local survFolder = GetSurvivors()
+        if survFolder then
+            for _, char in ipairs(survFolder:GetChildren()) do
+                if not Highlights[char] then
+                    local hl = Instance.new("Highlight")
+                    hl.Adornee = char
+                    hl.FillColor = Color3.fromRGB(0, 255, 0)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency = 0.6
+                    hl.Parent = char
+                    Highlights[char] = hl
+                end
+            end
+        end
+        local killFolder = GetKillers()
+        if killFolder then
+            for _, char in ipairs(killFolder:GetChildren()) do
+                if not Highlights[char] then
+                    local hl = Instance.new("Highlight")
+                    hl.Adornee = char
+                    hl.FillColor = Color3.fromRGB(255, 0, 0)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency = 0.6
+                    hl.Parent = char
+                    Highlights[char] = hl
+                end
+            end
+        end
     else
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if hrp then
-            local flatTarget = Vector3.new(predicted.X, hrp.Position.Y, predicted.Z)
-            local lookCF = CFrame.lookAt(hrp.Position, flatTarget)
-
-            hrp.CFrame = hrp.CFrame:Lerp(lookCF, 0.45)
+        for _, hl in pairs(Highlights) do if hl then hl:Destroy() end end
+        Highlights = {}
+    end
+    
+    -- Camera Lock (only if toggled)
+    if Features.CameraLock then
+        local targetHRP = nil
+        local closest = math.huge
+        RayParams.FilterDescendantsInstances = {myChar}
+        
+        local folder = (LockTargetType == "Survivor") and GetSurvivors() or GetKillers()
+        if folder then
+            for _, char in ipairs(folder:GetChildren()) do
+                if char \~= myChar and char:FindFirstChild("HumanoidRootPart") then
+                    local hrp = char.HumanoidRootPart
+                    local dist = (hrp.Position - myHRP.Position).Magnitude
+                    if dist <= RangeValue and dist < closest then
+                        local ray = Workspace:Raycast(myHRP.Position, (hrp.Position - myHRP.Position), RayParams)
+                        if not ray or ray.Distance >= dist - 2 then
+                            closest = dist
+                            targetHRP = hrp
+                        end
+                    end
+                end
+            end
+        end
+        
+        if targetHRP then
+            local predicted = targetHRP.Position + (targetHRP.Velocity * PredictionValue)
+            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, predicted)
+        end
+    end
+    
+    -- Auto Other Abilities & Auto Change (only if toggled)
+    if Features.AutoOtherAbilities then
+        for _, tool in ipairs(myChar:GetChildren()) do
+            if tool:IsA("Tool") and (tool.Name:lower():find("rage") or tool.Name:lower():find("eye") or tool.Name:lower():find("pizza") or tool.Name:lower():find("404")) then
+                tool:Activate()
+            end
+        end
+    end
+    if Features.AutoChange then
+        for _, tool in ipairs(myChar:GetChildren()) do
+            if tool:IsA("Tool") then
+                tool.Parent = LocalPlayer.Backpack
+                task.wait(0.5)
+                tool.Parent = myChar
+                break
+            end
         end
     end
 end)
 
--- =========================
--- 🎨 GUI (RECTANGULAR)
--- =========================
-
-local gui = Instance.new("ScreenGui")
-gui.Name = "TargetsakenUI"
-gui.ResetOnSpawn = false
-gui.Parent = PlayerGui
-
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,240,0,170)
-frame.Position = UDim2.new(0.7,0,0.6,0)
-frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-frame.Parent = gui
-Instance.new("UICorner",frame)
-
-local function makeBtn(text,y)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1,-10,0,32)
-    b.Position = UDim2.new(0,5,0,y)
-    b.Text = text
-    b.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    b.TextColor3 = Color3.new(1,1,1)
-    b.Parent = frame
-    Instance.new("UICorner",b)
-    return b
-end
-
-local lockBtn = makeBtn("OFF",10)
-local modeBtn = makeBtn("MODE: CAM",50)
-local prioBtn = makeBtn("CENTER",90)
-
--- toggle button
-local toggle = Instance.new("TextButton")
-toggle.Size = UDim2.new(0,40,0,40)
-toggle.Position = UDim2.new(0.7,0,0.55,0)
-toggle.Text = "≡"
-toggle.Parent = gui
-
-local visible = true
-toggle.MouseButton1Click:Connect(function()
-    visible = not visible
-    frame.Visible = visible
-end)
-
--- button logic
-lockBtn.MouseButton1Click:Connect(function()
-    LockEnabled = not LockEnabled
-    lockBtn.Text = LockEnabled and "ON" or "OFF"
-    if not LockEnabled then LockedTarget = nil end
-end)
-
-modeBtn.MouseButton1Click:Connect(function()
-    if LockMode == "Camera" then
-        LockMode = "Character"
-        modeBtn.Text = "MODE: CHAR"
-    else
-        LockMode = "Camera"
-        modeBtn.Text = "MODE: CAM"
-    end
-end)
-
-prioBtn.MouseButton1Click:Connect(function()
-    if TargetPriority == "Center" then
-        TargetPriority = "LowestHP"
-        prioBtn.Text = "LOW HP"
-    else
-        TargetPriority = "Center"
-        prioBtn.Text = "CENTER"
-    end
-    LockedTarget = nil
-end)
-
--- =========================
--- 📱 DRAG FIX (MOBILE + PC)
--- =========================
-
-local dragging = false
-local dragStart, startPos
-
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 
-    or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-    end
-end)
-
-frame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 
-    or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement 
-    or input.UserInputType == Enum.UserInputType.Touch) then
-
-        local delta = input.Position - dragStart
-
-        frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
+print("✅ Targetsaken LOADED! GUI is draggable (drag title bar) + closable (click X top right). All buttons active, NOTHING starts ON until you toggle! 🔥 Go have fun, bestie! ❤️")
