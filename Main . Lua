@@ -1,4 +1,4 @@
--- TARGETSAKEN HARD LOCK | Optimized Forsaken GUI
+-- TARGETSAKEN HARD LOCK | Optimized Forsaken GUI + Camera Behind Player
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,17 +9,18 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- =========================
 -- SETTINGS
--- =========================
 local LockEnabled = false
 local LockMode = "Camera"       -- "Camera" or "Character"
 local TargetPriority = "Center" -- "Center" or "LowestHP"
 local LockedTarget = nil
 
--- =========================
+local PredictionFactor = 0.25
+local BodyOffset = Vector3.new(0,2,0)
+local CameraDistance = 12
+local CameraHeight = 5
+
 -- TARGET FUNCTIONS
--- =========================
 local function isValidCharacter(char)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -60,9 +61,7 @@ local function getTarget()
     return best
 end
 
--- =========================
--- HARD LOCK SYSTEM
--- =========================
+-- HARD LOCK LOOP
 RunService.RenderStepped:Connect(function()
     if not LockEnabled then return end
     if not LockedTarget or not LockedTarget.Parent then
@@ -70,26 +69,26 @@ RunService.RenderStepped:Connect(function()
     end
     if not LockedTarget then return end
 
-    local camPos = Camera.CFrame.Position
-    local targetPos = LockedTarget.Position
-    local vel = LockedTarget.AssemblyLinearVelocity or LockedTarget.Velocity
-    local predicted = targetPos + vel * 0.2 -- ability prediction
+    local char = LocalPlayer.Character
+    local charHRP = char and char:FindFirstChild("HumanoidRootPart")
+    if not charHRP then return end
+
+    local targetHRP = LockedTarget
+    local vel = targetHRP.AssemblyLinearVelocity or targetHRP.Velocity
+    local predicted = targetHRP.Position + vel * PredictionFactor + BodyOffset
 
     if LockMode == "Camera" then
-        Camera.CFrame = CFrame.lookAt(camPos, predicted)
+        -- CAMERA BEHIND PLAYER
+        local behindPos = charHRP.Position - charHRP.CFrame.LookVector * CameraDistance + Vector3.new(0,CameraHeight,0)
+        Camera.CFrame = CFrame.new(behindPos, predicted)
     else
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local flatTarget = Vector3.new(predicted.X,hrp.Position.Y,predicted.Z)
-            hrp.CFrame = CFrame.lookAt(hrp.Position, flatTarget)
-        end
+        -- CHARACTER HARD LOCK
+        local flatTarget = Vector3.new(predicted.X, charHRP.Position.Y, predicted.Z)
+        charHRP.CFrame = CFrame.lookAt(charHRP.Position, flatTarget)
     end
 end)
 
--- =========================
--- GUI
--- =========================
+-- GUI SETUP
 local gui = Instance.new("ScreenGui")
 gui.Name = "TargetsakenUI"
 gui.ResetOnSpawn = false
@@ -114,7 +113,7 @@ header.BackgroundTransparency = 0.2
 header.Parent = frame
 Instance.new("UICorner",header)
 
--- Helper to make buttons
+-- BUTTON CREATOR
 local function makeBtn(text,y)
     local b = Instance.new("TextButton")
     b.Size = UDim2.new(1,-10,0,28)
@@ -131,7 +130,7 @@ local lockBtn = makeBtn("LOCK: OFF",40)
 local modeBtn = makeBtn("MODE: CAM",70)
 local prioBtn = makeBtn("PRIORITY: CENTER",100)
 
--- Open/Close Button
+-- OPEN/CLOSE BUTTON
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0,30,0,30)
 toggleBtn.Position = UDim2.new(0.75,0,0.55,0)
@@ -173,30 +172,22 @@ prioBtn.MouseButton1Click:Connect(function()
     LockedTarget = nil
 end)
 
--- =========================
--- DRAGGABLE FRAME
--- =========================
+-- DRAGGABLE GUI
 local dragging, dragStart, startPos = false, nil, nil
-
 frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
         startPos = frame.Position
     end
 end)
-
 frame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = false
     end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-    or input.UserInputType == Enum.UserInputType.Touch) then
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStart
         frame.Position = UDim2.new(
             startPos.X.Scale,
