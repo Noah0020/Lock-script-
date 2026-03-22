@@ -1,4 +1,4 @@
--- TARGETSAKEN HARD LOCK | Full Forsaken Script with Prediction Options
+-- TARGETSAKEN FULL SCRIPT | Hard Lock + Adjustable Prediction
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -96,7 +96,7 @@ gui.ResetOnSpawn = false
 gui.Parent = PlayerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,250,0,220)
+frame.Size = UDim2.new(0,250,0,240) -- extended height for slider
 frame.Position = UDim2.new(0.7,0,0.6,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.Parent = gui
@@ -145,7 +145,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     toggleBtn.Text = guiVisible and "-" or "+"
 end)
 
--- PREDICTION SLIDER
+-- PREDICTION SLIDER (fixed visibility)
 local predLabel = Instance.new("TextLabel")
 predLabel.Size = UDim2.new(1,-10,0,20)
 predLabel.Position = UDim2.new(0,5,0,135)
@@ -178,7 +178,7 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
         local mouseX = math.clamp(input.Position.X - predSlider.AbsolutePosition.X, 0, predSlider.AbsoluteSize.X)
-        PredictionFactor = 1 + (mouseX / predSlider.AbsoluteSize.X) * 9 -- 1 to 10
+        PredictionFactor = 1 + (mouseX / predSlider.AbsoluteSize.X) * 9 -- maps 1 to 10
         predLabel.Text = string.format("Prediction: %.2f", PredictionFactor)
     end
 end)
