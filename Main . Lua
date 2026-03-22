@@ -1,4 +1,4 @@
--- TARGETSAKEN HARD LOCK | Optimized Forsaken GUI + Camera Behind Player
+-- TARGETSAKEN HARD LOCK | Full Forsaken Script with Prediction Options
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -30,7 +30,7 @@ end
 local function isEnemy(player)
     if player == LocalPlayer then return false end
     if not player.Character then return false end
-    return true -- Forsaken: always lock enemies
+    return true
 end
 
 local function getTarget()
@@ -75,6 +75,7 @@ RunService.RenderStepped:Connect(function()
 
     local targetHRP = LockedTarget
     local vel = targetHRP.AssemblyLinearVelocity or targetHRP.Velocity
+    -- predicted position + body offset
     local predicted = targetHRP.Position + vel * PredictionFactor + BodyOffset
 
     if LockMode == "Camera" then
@@ -95,8 +96,8 @@ gui.ResetOnSpawn = false
 gui.Parent = PlayerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,220,0,150)
-frame.Position = UDim2.new(0.75,0,0.6,0)
+frame.Size = UDim2.new(0,250,0,220)
+frame.Position = UDim2.new(0.7,0,0.6,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.Parent = gui
 Instance.new("UICorner",frame)
@@ -133,7 +134,7 @@ local prioBtn = makeBtn("PRIORITY: CENTER",100)
 -- OPEN/CLOSE BUTTON
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0,30,0,30)
-toggleBtn.Position = UDim2.new(0.75,0,0.55,0)
+toggleBtn.Position = UDim2.new(0.7,0,0.55,0)
 toggleBtn.Text = "-"
 toggleBtn.Parent = gui
 
@@ -142,6 +143,44 @@ toggleBtn.MouseButton1Click:Connect(function()
     guiVisible = not guiVisible
     frame.Visible = guiVisible
     toggleBtn.Text = guiVisible and "-" or "+"
+end)
+
+-- PREDICTION SLIDER
+local predLabel = Instance.new("TextLabel")
+predLabel.Size = UDim2.new(1,-10,0,20)
+predLabel.Position = UDim2.new(0,5,0,135)
+predLabel.Text = "Prediction: "..PredictionFactor
+predLabel.TextScaled = true
+predLabel.Font = Enum.Font.SourceSans
+predLabel.TextColor3 = Color3.new(1,1,1)
+predLabel.BackgroundTransparency = 1
+predLabel.Parent = frame
+
+local predSlider = Instance.new("TextButton")
+predSlider.Size = UDim2.new(1,-10,0,20)
+predSlider.Position = UDim2.new(0,5,0,160)
+predSlider.BackgroundColor3 = Color3.fromRGB(70,70,70)
+predSlider.Text = ""
+predSlider.Parent = frame
+Instance.new("UICorner", predSlider)
+
+local draggingSlider = false
+predSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingSlider = true
+    end
+end)
+predSlider.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingSlider = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local mouseX = math.clamp(input.Position.X - predSlider.AbsolutePosition.X, 0, predSlider.AbsoluteSize.X)
+        PredictionFactor = 1 + (mouseX / predSlider.AbsoluteSize.X) * 9 -- 1 to 10
+        predLabel.Text = string.format("Prediction: %.2f", PredictionFactor)
+    end
 end)
 
 -- BUTTON LOGIC
