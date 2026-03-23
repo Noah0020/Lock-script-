@@ -1,5 +1,3 @@
-math.randomseed(tick())
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -8,256 +6,135 @@ local Camera = workspace.CurrentCamera
 local lp = Players.LocalPlayer
 local pg = lp:WaitForChild("PlayerGui")
 
-local on = false
-local mode = "Center"
+local lock = false
 local target
-
-local killer = false
-local auto = true
-
 local pred = 0.25
-local yoff = Vector3.new(0,2,0)
+local yOffset = Vector3.new(0,2,0)
+local camDist = 12
+local camHeight = 5
 
-local dist = 12
-local height = 5
-
-local function ok(c)
-    local h = c and c:FindFirstChildOfClass("Humanoid")
-    local r = c and c:FindFirstChild("HumanoidRootPart")
+local function validChar(c)
+    local h = c:FindFirstChildOfClass("Humanoid")
+    local r = c:FindFirstChild("HumanoidRootPart")
     return h and r and h.Health > 0
 end
 
-local function isKill(p)
-    return p.Team and p.Team.Name == "Killer"
-end
-
-local function get()
+local function getClosest()
     local best, val = nil, math.huge
     local mid = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-
-    for _,v in ipairs(Players:GetPlayers()) do
-        if v ~= lp and v.Character and ok(v.Character) then
-            if killer and not isKill(v) then continue end
-
-            local hrp = v.Character.HumanoidRootPart
-            local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
-
-            if vis then
-                if mode == "Center" then
-                    local d = (Vector2.new(pos.X,pos.Y) - mid).Magnitude
-                    if d < val then
-                        val = d
-                        best = hrp
-                    end
-                else
-                    local hp = v.Character:FindFirstChildOfClass("Humanoid").Health
-                    if hp < val then
-                        val = hp
-                        best = hrp
-                    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp and p.Character and validChar(p.Character) then
+            local hrp = p.Character.HumanoidRootPart
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                local d = (Vector2.new(pos.X,pos.Y) - mid).Magnitude
+                if d < val then
+                    val = d
+                    best = hrp
                 end
             end
         end
     end
-
     return best
 end
 
 RunService.RenderStepped:Connect(function()
-    if not on then return end
-
+    if not lock then return end
     local char = lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    if not target or not target.Parent or not ok(target.Parent) then
-        target = get()
+    if not target or not target.Parent then
+        target = getClosest()
     end
     if not target then return end
 
-    local vel = target.AssemblyLinearVelocity or target.Velocity or Vector3.zero
-    local spd = vel.Magnitude
-    local p = pred + (spd / 100)
+    local vel = target.AssemblyLinearVelocity or Vector3.zero
+    local aim = target.Position + vel * pred + yOffset
 
-    local aim = target.Position + vel * p + yoff
-
-    hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(aim.X, hrp.Position.Y, aim.Z))
-
-    local back = hrp.Position - hrp.CFrame.LookVector * dist + Vector3.new(0, height, 0)
-    Camera.CFrame = CFrame.new(back, aim)
+    local camPos = hrp.Position - (aim - hrp.Position).Unit * camDist + Vector3.new(0, camHeight, 0)
+    Camera.CFrame = CFrame.new(camPos, aim)
 end)
 
-UIS.InputBegan:Connect(function(i,g)
-    if g then return end
-    if auto and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
-        target = get()
-    end
-end)
-
+-- GUI
 local gui = Instance.new("ScreenGui", pg)
 gui.ResetOnSpawn = false
 
-local load = Instance.new("ScreenGui", pg)
-
-local f = Instance.new("Frame", load)
-f.Size = UDim2.new(.5,0,.5,0)
-f.Position = UDim2.new(.25,0,.25,0)
-f.BackgroundColor3 = Color3.fromRGB(0,0,0)
-f.BackgroundTransparency = .2
-Instance.new("UICorner", f)
-
-local img = Instance.new("ImageLabel", f)
-img.Size = UDim2.new(1,0,1,0)
-img.BackgroundTransparency = 1
-img.Image = "rbxassetid://92460766977717"
-
-local t = Instance.new("TextLabel", f)
-t.Size = UDim2.new(1,0,.3,0)
-t.Position = UDim2.new(0,0,.35,0)
-t.BackgroundTransparency = 1
-t.Text = "TARGETSAKEN"
-t.TextScaled = true
-t.Font = Enum.Font.SourceSansBold
-t.TextColor3 = Color3.fromRGB(255,0,0)
-
-local sub = Instance.new("TextLabel", f)
-sub.Size = UDim2.new(1,0,0.15,0)
-sub.Position = UDim2.new(0,0,0.7,0)
-sub.BackgroundTransparency = 1
-sub.TextScaled = true
-sub.TextColor3 = Color3.new(1,1,1)
-
-local msgs = {
-    "Targetsaken was made by me🔥",
-    "Targetsaken targets for you🔥"
-}
-sub.Text = msgs[math.random(1,#msgs)]
-
-gui.Enabled = false
-task.delay(2,function()
-    load:Destroy()
-    gui.Enabled = true
-end)
-
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0,250,0,260)
+frame.Size = UDim2.new(0,250,0,100)
 frame.Position = UDim2.new(.7,0,.6,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Instance.new("UICorner", frame)
 
-local function btn(txt,y)
-    local b = Instance.new("TextButton", frame)
-    b.Size = UDim2.new(1,-10,0,28)
-    b.Position = UDim2.new(0,5,0,y)
-    b.Text = txt
-    b.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    b.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", b)
-    return b
-end
+local lockBtn = Instance.new("TextButton", frame)
+lockBtn.Size = UDim2.new(1,-10,0,30)
+lockBtn.Position = UDim2.new(0,5,0,10)
+lockBtn.Text = "LOCK: OFF"
+lockBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+lockBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", lockBtn)
 
-local lock = btn("LOCK: OFF",40)
-local prio = btn("PRIORITY: CENTER",70)
-local kbtn = btn("KILLER: OFF",100)
-local abtn = btn("AUTOLOCK: ON",130)
+local predLabel = Instance.new("TextLabel", frame)
+predLabel.Size = UDim2.new(1,-10,0,20)
+predLabel.Position = UDim2.new(0,5,0,50)
+predLabel.Text = "Prediction: "..pred
+predLabel.TextColor3 = Color3.new(1,1,1)
+predLabel.BackgroundTransparency = 1
 
-local toggle = Instance.new("TextButton", gui)
-toggle.Size = UDim2.new(0,30,0,30)
-toggle.Position = UDim2.new(.7,0,.55,0)
-toggle.Text = "-"
-toggle.BackgroundColor3 = Color3.fromRGB(50,50,50)
-Instance.new("UICorner", toggle)
+local predBox = Instance.new("TextBox", frame)
+predBox.Size = UDim2.new(1,-10,0,20)
+predBox.Position = UDim2.new(0,5,0,70)
+predBox.Text = tostring(pred)
+predBox.ClearTextOnFocus = false
+predBox.TextColor3 = Color3.new(1,1,1)
+predBox.BackgroundColor3 = Color3.fromRGB(50,50,50)
+Instance.new("UICorner", predBox)
 
-local open = true
-toggle.MouseButton1Click:Connect(function()
-    open = not open
-    frame.Visible = open
-    toggle.Text = open and "-" or "+"
+-- Buttons
+lockBtn.MouseButton1Click:Connect(function()
+    lock = not lock
+    lockBtn.Text = lock and "LOCK: ON" or "LOCK: OFF"
+    if not lock then target = nil end
 end)
 
-local lab = Instance.new("TextLabel", frame)
-lab.Size = UDim2.new(1,-10,0,20)
-lab.Position = UDim2.new(0,5,0,170)
-lab.Text = "Prediction: "..pred
-lab.BackgroundTransparency = 1
-lab.TextColor3 = Color3.new(1,1,1)
-
-local bar = Instance.new("Frame", frame)
-bar.Size = UDim2.new(1,-10,0,20)
-bar.Position = UDim2.new(0,5,0,195)
-bar.BackgroundColor3 = Color3.fromRGB(70,70,70)
-Instance.new("UICorner", bar)
-
-local knob = Instance.new("Frame", bar)
-knob.Size = UDim2.new(0,20,1,0)
-knob.BackgroundColor3 = Color3.fromRGB(200,0,0)
-Instance.new("UICorner", knob)
-
-local drag = false
-knob.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end
-end)
-
-UIS.InputEnded:Connect(function()
-    drag = false
-end)
-
-UIS.InputChanged:Connect(function(i)
-    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local x = math.clamp(i.Position.X - bar.AbsolutePosition.X,0,bar.AbsoluteSize.X)
-        knob.Position = UDim2.new(0,x-10,0,0)
-        pred = 1 + (x/bar.AbsoluteSize.X)*9
-        lab.Text = string.format("Prediction: %.2f",pred)
+predBox.FocusLost:Connect(function(enter)
+    local n = tonumber(predBox.Text)
+    if n and n >= 0 and n <= 10 then
+        pred = n
+        predLabel.Text = "Prediction: "..pred
+    else
+        predBox.Text = tostring(pred)
     end
 end)
 
-lock.MouseButton1Click:Connect(function()
-    on = not on
-    lock.Text = on and "LOCK: ON" or "LOCK: OFF"
-    if not on then target = nil end
-end)
-
-prio.MouseButton1Click:Connect(function()
-    mode = (mode == "Center") and "LowestHP" or "Center"
-    prio.Text = mode == "Center" and "PRIORITY: CENTER" or "PRIORITY: LOW HP"
-    target = nil
-end)
-
-kbtn.MouseButton1Click:Connect(function()
-    killer = not killer
-    kbtn.Text = killer and "KILLER: ON" or "KILLER: OFF"
-    target = nil
-end)
-
-abtn.MouseButton1Click:Connect(function()
-    auto = not auto
-    abtn.Text = auto and "AUTOLOCK: ON" or "AUTOLOCK: OFF"
-end)
-
-local function dragUI(o)
-    local d,inp,s,p
-    o.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            d=true
-            s=i.Position
-            p=o.Position
-            i.Changed:Connect(function()
-                if i.UserInputState==Enum.UserInputState.End then d=false end
+-- Draggable frame
+local function drag(obj)
+    local dragging, dragInput, startPos, startFrame
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            startPos = input.Position
+            startFrame = obj.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
-    o.InputChanged:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then
-            inp=i
+    obj.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
         end
     end)
-    UIS.InputChanged:Connect(function(i)
-        if i==inp and d then
-            local delta=i.Position-s
-            o.Position=UDim2.new(p.X.Scale,p.X.Offset+delta.X,p.Y.Scale,p.Y.Offset+delta.Y)
+    UIS.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - startPos
+            obj.Position = UDim2.new(
+                startFrame.X.Scale, startFrame.X.Offset + delta.X,
+                startFrame.Y.Scale, startFrame.Y.Offset + delta.Y
+            )
         end
     end)
 end
 
-dragUI(frame)
-dragUI(toggle)
+drag(frame)
