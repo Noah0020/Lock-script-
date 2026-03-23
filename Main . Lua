@@ -7,15 +7,16 @@ local plr = Players.LocalPlayer
 local cam = Workspace.CurrentCamera
 local guiParent = plr:WaitForChild("PlayerGui")
 
--- SETTINGS
 local enabled = false
+local mode = "Center"
 local target = nil
+
 local pred = 0.25
 local yOffset = Vector3.new(0,2,0)
+
 local camDist = 12
 local camHeight = 5
 
--- VALIDATE CHARACTER
 local function validChar(c)
     if not c then return false end
     local h = c:FindFirstChildOfClass("Humanoid")
@@ -23,31 +24,42 @@ local function validChar(c)
     return h and r and h.Health > 0
 end
 
--- GET CLOSEST TARGET
 local function getTarget()
     local best, val = nil, math.huge
     local middle = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)
+
     for _,v in ipairs(Players:GetPlayers()) do
         if v ~= plr and v.Character and validChar(v.Character) then
             local hrp = v.Character.HumanoidRootPart
             local pos, onScreen = cam:WorldToViewportPoint(hrp.Position)
+
             if onScreen then
-                local dist = (Vector2.new(pos.X,pos.Y) - middle).Magnitude
-                if dist < val then
-                    val = dist
-                    best = hrp
+                if mode == "Center" then
+                    local dist = (Vector2.new(pos.X,pos.Y) - middle).Magnitude
+                    if dist < val then
+                        val = dist
+                        best = hrp
+                    end
+                else
+                    local hp = v.Character:FindFirstChildOfClass("Humanoid").Health
+                    if hp < val then
+                        val = hp
+                        best = hrp
+                    end
                 end
             end
         end
     end
+
     return best
 end
 
--- MAIN LOCK LOOP
 RunService.RenderStepped:Connect(function()
     if not enabled then return end
+
     local char = plr.Character
     if not char then return end
+
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
@@ -59,59 +71,52 @@ RunService.RenderStepped:Connect(function()
     local vel = target.AssemblyLinearVelocity or target.Velocity
     local aimPos = target.Position + vel * pred + yOffset
 
-    -- CHARACTER + CAMERA HARD LOCK
     hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(aimPos.X, hrp.Position.Y, aimPos.Z))
-    cam.CFrame = CFrame.new(hrp.Position - hrp.CFrame.LookVector * camDist + Vector3.new(0, camHeight, 0), aimPos)
+
+    local camPos = hrp.Position - hrp.CFrame.LookVector * camDist + Vector3.new(0, camHeight, 0)
+    cam.CFrame = CFrame.new(camPos, aimPos)
 end)
 
--- GUI
+-- UI
 local gui = Instance.new("ScreenGui")
 gui.Name = "TargetsakenUI"
 gui.Parent = guiParent
 gui.ResetOnSpawn = false
-gui.Enabled = false
 
--- LOADING SCREEN WITH RANDOM DESCRIPTION
+-- loading
 local loadGui = Instance.new("ScreenGui", guiParent)
-loadGui.Name = "LoadScreen"
-loadGui.ResetOnSpawn = false
+loadGui.Name = "load"
 
 local lf = Instance.new("Frame", loadGui)
-lf.Size = UDim2.new(0.5,0,0.5,0)
-lf.Position = UDim2.new(0.25,0,0.25,0)
+lf.Size = UDim2.new(.5,0,.5,0)
+lf.Position = UDim2.new(.25,0,.25,0)
 lf.BackgroundColor3 = Color3.fromRGB(0,0,0)
-lf.BackgroundTransparency = 0.2
+lf.BackgroundTransparency = .2
 Instance.new("UICorner", lf)
 
-local bg = Instance.new("ImageLabel", lf)
-bg.Size = UDim2.new(1,0,1,0)
-bg.BackgroundTransparency = 1
-bg.Image = "rbxassetid://92460766977717"
-
-local descriptions = {
-    "TARGETSAKEN targets for you🔥",
-    "TARGETSAKEN was made by me🔥"
-}
-local descText = descriptions[math.random(1,#descriptions)]
+local img = Instance.new("ImageLabel", lf)
+img.Size = UDim2.new(1,0,1,0)
+img.BackgroundTransparency = 1
+img.Image = "rbxassetid://92460766977717"
 
 local txt = Instance.new("TextLabel", lf)
-txt.Size = UDim2.new(1,0,0.3,0)
+txt.Size = UDim2.new(1,0,.3,0)
 txt.Position = UDim2.new(0,0,.35,0)
 txt.BackgroundTransparency = 1
-txt.Text = descText
+txt.Text = "TARGETSAKEN"
 txt.TextScaled = true
 txt.Font = Enum.Font.SourceSansBold
 txt.TextColor3 = Color3.fromRGB(255,0,0)
 
+gui.Enabled = false
 task.delay(2,function()
     loadGui:Destroy()
     gui.Enabled = true
 end)
 
--- MAIN GUI
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0,250,0,150)
-frame.Position = UDim2.new(0.7,0,0.6,0)
+frame.Size = UDim2.new(0,250,0,240)
+frame.Position = UDim2.new(.7,0,.6,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Instance.new("UICorner", frame)
 
@@ -121,31 +126,30 @@ title.Text = "TARGETSAKEN"
 title.TextScaled = true
 title.Font = Enum.Font.SourceSansBold
 title.TextColor3 = Color3.fromRGB(255,0,0)
-title.BackgroundTransparency = 0.2
+title.BackgroundTransparency = .2
 Instance.new("UICorner", title)
 
--- BUTTON CREATOR
-local function button(txtText, y)
+local function button(txt, y)
     local b = Instance.new("TextButton", frame)
     b.Size = UDim2.new(1,-10,0,28)
     b.Position = UDim2.new(0,5,0,y)
-    b.Text = txtText
+    b.Text = txt
     b.BackgroundColor3 = Color3.fromRGB(50,50,50)
     b.TextColor3 = Color3.new(1,1,1)
     Instance.new("UICorner", b)
     return b
 end
 
-local lockBtn = button("LOCK: OFF",40)
-local predInputBtn = button("PREDICTION: "..pred,70)
+local lock = button("LOCK: OFF",40)
+local prio = button("PRIORITY: CENTER",70)
 
--- TOGGLE GUI BUTTON
 local toggle = Instance.new("TextButton", gui)
 toggle.Size = UDim2.new(0,30,0,30)
 toggle.Position = UDim2.new(.7,0,.55,0)
 toggle.Text = "-"
 toggle.BackgroundColor3 = Color3.fromRGB(50,50,50)
 Instance.new("UICorner", toggle)
+
 local open = true
 toggle.MouseButton1Click:Connect(function()
     open = not open
@@ -153,9 +157,47 @@ toggle.MouseButton1Click:Connect(function()
     toggle.Text = open and "-" or "+"
 end)
 
--- DRAG FUNCTION
+local label = Instance.new("TextLabel", frame)
+label.Size = UDim2.new(1,-10,0,20)
+label.Position = UDim2.new(0,5,0,120)
+label.Text = "Prediction: "..pred
+label.TextScaled = true
+label.BackgroundTransparency = 1
+label.TextColor3 = Color3.new(1,1,1)
+
+local bar = Instance.new("Frame", frame)
+bar.Size = UDim2.new(1,-10,0,20)
+bar.Position = UDim2.new(0,5,0,145)
+bar.BackgroundColor3 = Color3.fromRGB(70,70,70)
+Instance.new("UICorner", bar)
+
+local knob = Instance.new("Frame", bar)
+knob.Size = UDim2.new(0,20,1,0)
+knob.BackgroundColor3 = Color3.fromRGB(200,0,0)
+Instance.new("UICorner", knob)
+
+local dragging = false
+knob.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+end)
+
+UIS.InputEnded:Connect(function()
+    dragging = false
+end)
+
+UIS.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local x = math.clamp(i.Position.X - bar.AbsolutePosition.X,0,bar.AbsoluteSize.X)
+        knob.Position = UDim2.new(0,x-10,0,0)
+        pred = 1 + (x/bar.AbsoluteSize.X)*9
+        label.Text = string.format("Prediction: %.2f",pred)
+    end
+end)
+
+-- draggable (your working one)
 local function drag(obj)
     local d,inp,start,pos
+
     obj.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
             d = true
@@ -166,11 +208,13 @@ local function drag(obj)
             end)
         end
     end)
+
     obj.InputChanged:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
             inp = i
         end
     end)
+
     UIS.InputChanged:Connect(function(i)
         if i == inp and d then
             local delta = i.Position - start
@@ -178,31 +222,23 @@ local function drag(obj)
         end
     end)
 end
+
 drag(frame)
 drag(toggle)
 
--- BUTTON FUNCTIONS
-lockBtn.MouseButton1Click:Connect(function()
+lock.MouseButton1Click:Connect(function()
     enabled = not enabled
-    lockBtn.Text = enabled and "LOCK: ON" or "LOCK: OFF"
+    lock.Text = enabled and "LOCK: ON" or "LOCK: OFF"
     if not enabled then target = nil end
 end)
 
-predInputBtn.MouseButton1Click:Connect(function()
-    local input = tostring(pred)
-    local textbox = Instance.new("TextBox", frame)
-    textbox.Size = UDim2.new(1,-10,0,28)
-    textbox.Position = UDim2.new(0,5,0,100)
-    textbox.Text = input
-    textbox.PlaceholderText = "Enter Prediction (0.1-10)"
-    textbox.TextScaled = true
-    textbox.ClearTextOnFocus = false
-    textbox.FocusLost:Connect(function(enterPressed)
-        local num = tonumber(textbox.Text)
-        if num and num >= 0.1 and num <= 10 then
-            pred = num
-            predInputBtn.Text = "PREDICTION: "..pred
-        end
-        textbox:Destroy()
-    end)
+prio.MouseButton1Click:Connect(function()
+    if mode == "Center" then
+        mode = "LowestHP"
+        prio.Text = "PRIORITY: LOW HP"
+    else
+        mode = "Center"
+        prio.Text = "PRIORITY: CENTER"
+    end
+    target = nil
 end)
